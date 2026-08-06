@@ -12,7 +12,7 @@ services:
     environment:
       # Service Config
       - API_SERVICE_ENV=${API_SERVICE_ENV:-dev}
-      - API_SERVICE_LOG_LEVEL=${API_SERVICE_LOG_LEVEL:-INFO}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
       # 业务默认时区（与系统配置 platform_timezone 默认值一致；无法改 MySQL 时仍可对齐应用写入时间）
       - TZ=${TZ:-Asia/Shanghai}
       - PLATFORM_TIMEZONE=${PLATFORM_TIMEZONE:-Asia/Shanghai}
@@ -25,32 +25,33 @@ services:
       - MYSQL_PORT=${MYSQL_PORT:-3306}
       - MYSQL_DB=${MYSQL_DB:-nanzi_ai_agent_platform}
       - MYSQL_USER=${MYSQL_USER:-root}
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-root123}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:?MYSQL_PASSWORD must be set}
 
       # PostgreSQL (used when DATABASE_TYPE=postgresql)
       - POSTGRES_HOST=${POSTGRES_HOST:-postgres}
       - POSTGRES_PORT=${POSTGRES_PORT:-5432}
       - POSTGRES_DB=${POSTGRES_DB:-nanzi_ai_agent_platform}
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-your_password}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
 
       # Redis (Internal Service)
       - REDIS_HOST=${REDIS_HOST:-redis}
       - REDIS_PORT=${REDIS_PORT:-6379}
       - REDIS_DB=${REDIS_DB:-0}
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-root123}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:?REDIS_PASSWORD must be set}
       - REDIS_ENABLE=${REDIS_ENABLE:-true}
 
       # Security
       - API_SERVICE_API_KEY_HASH_ALGORITHM=${API_SERVICE_API_KEY_HASH_ALGORITHM:-sha256}
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:?ENCRYPTION_KEY must be set}
 
       # Jira Integration
       - JIRA_URL=${JIRA_URL}
       - JIRA_USERNAME=${JIRA_USERNAME}
       - JIRA_PASSWORD=${JIRA_PASSWORD}
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
 
     restart: unless-stopped
 
@@ -59,4 +60,26 @@ services:
     container_name: nanzi-redis
     ports:
       - "6379:6379"
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD:?REDIS_PASSWORD must be set}
+    command:
+      - redis-stack-server
+      - --requirepass
+      - ${REDIS_PASSWORD:?REDIS_PASSWORD must be set}
+      - --appendonly
+      - "yes"
+      - --appendfsync
+      - everysec
+      - --maxmemory-policy
+      - noeviction
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
+
+volumes:
+  redis-data:

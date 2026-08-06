@@ -293,7 +293,7 @@ async def test_mcp_server_crud(client: AsyncClient, admin_api_key: str):
     payload = {
         "server_name": unique_name,
         "remark": "用于联调的测试 MCP",
-        "sse_url": f"http://localhost:8000/sse/{uuid.uuid4().hex[:4]}",
+        "sse_url": f"https://crud.example/sse/{uuid.uuid4().hex[:4]}",
         "auth_headers": '{"Authorization": "Bearer test"}',
         "enabled_status": 1
     }
@@ -306,6 +306,8 @@ async def test_mcp_server_crud(client: AsyncClient, admin_api_key: str):
     assert data["server_name"] == unique_name
     assert data.get("remark") == "用于联调的测试 MCP"
     assert data["published_tool_count"] == 0
+    assert data["has_auth_headers"] is True
+    assert "auth_headers" not in data
 
     # 2. List Servers
     resp = await client.get("/api/portal/mcp/servers", headers=headers)
@@ -315,6 +317,8 @@ async def test_mcp_server_crud(client: AsyncClient, admin_api_key: str):
     found = next((s for s in servers if s["id"] == server_id), None)
     assert found is not None
     assert found.get("remark") == "用于联调的测试 MCP"
+    assert found["has_auth_headers"] is True
+    assert "auth_headers" not in found
 
     # 3. Update Server
     update_payload = {

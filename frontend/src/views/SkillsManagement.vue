@@ -4,7 +4,7 @@ import axios from '../utils/axios'
 import { useToast } from '../composables/useToast'
 import SkillFileTree from '../components/SkillFileTree.vue'
 import ConfirmModal from '../components/ConfirmModal.vue'
-import MarkdownIt from 'markdown-it'
+import { renderMarkdownPreview } from '@/utils/markdown'
 import { copyToClipboard } from '../utils/clipboard'
 import { useUser } from '../composables/useUser'
 
@@ -877,12 +877,6 @@ const handleEditorKeydown = (e: KeyboardEvent) => {
   }
 }
 
-const mdParser = new MarkdownIt({
-  html: true,
-  linkify: true,
-  breaks: true
-})
-
 const editorMode = ref<'edit' | 'preview'>('preview')
 
 const isMarkdownFile = computed(() => {
@@ -892,9 +886,9 @@ const isMarkdownFile = computed(() => {
 const renderedMarkdown = computed(() => {
   if (!editingContent.value) return '<p class="preview-empty">暂无内容，请先在编辑视图中编写</p>'
   try {
-    return mdParser.render(editingContent.value)
+    return renderMarkdownPreview(editingContent.value)
   } catch (e) {
-    return `<p class="text-red-400 p-4">渲染解析 Markdown 时遇到错误: ${e}</p>`
+    return '<p class="text-red-400 p-4">渲染 Markdown 时遇到错误</p>'
   }
 })
 

@@ -11,6 +11,7 @@ from app.api.portal.api import portal_router
 from app.api.v1.api import v1_router
 from app.core.config import settings
 from app.core import database, redis
+from app.core.runtime_health import runtime_health
 from app.core.middleware import AccessLogMiddleware
 from app.services.audit_service import AuditService
 from app.services.auth_service import AuthService
@@ -23,6 +24,7 @@ import datetime
 import uuid
 import os
 from fastapi.staticfiles import StaticFiles
+from app.utils.path_security import resolve_contained_file
 from fastapi.responses import FileResponse
 from app.core.orm import get_db_session
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,7 +33,7 @@ from sqlalchemy.exc import OperationalError as SQLAlchemyOperationalError
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO),
     format='%(levelname)s:     %(message)s'
 )
 logging.getLogger('apscheduler').setLevel(logging.DEBUG)
@@ -39,6 +41,8 @@ logging.getLogger('apscheduler').setLevel(logging.DEBUG)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
+    runtime_health.begin_startup()
+    settings.validate_runtime_configuration()
     await database.init_db()
     await redis.init_redis()
     await AuditService.start_worker()
@@ -79,8 +83,10 @@ async def lifespan(app: FastAPI):
     # 记忆摘要索引：Redis 重启后易丢失，启动时自动 ensure（设计文档约定）
     asyncio.create_task(maybe_ensure_memory_index_on_startup())
 
+    runtime_health.finish_startup()
     yield
     # Shutdown
+    runtime_health.begin_draining()
     from app.services.ai.scheduler_service import scheduler_service
     await scheduler_service.stop()
     await GlobalHttpClient.close()
@@ -89,6 +95,7 @@ async def lifespan(app: FastAPI):
     await DataSourcePoolManager.close_all_pools()
     await database.close_db()
     await redis.close_redis()
+    runtime_health.finish_shutdown()
 
 app = FastAPI(
     title="南孜·智能体平台",
@@ -295,6 +302,70 @@ app.include_router(portal_router, prefix="/api/portal")
 async def health_check():
     return {"status": "ok"}
 
+
+@app.get("/live")
+async def liveness_check():
+    return JSONResponse(
+        status_code=200,
+        content={"status": "alive"},
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@app.get("/startup")
+async def startup_check():
+    is_started = runtime_health.startup_complete
+    return JSONResponse(
+        status_code=200 if is_started else 503,
+        content={"status": "started" if is_started else "starting"},
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+async def _readiness_checks() -> dict[str, bool]:
+    import asyncio
+    from sqlalchemy import text
+    from app.core.orm import engine
+
+    checks = {"database": False, "redis": not settings.REDIS_ENABLE}
+    try:
+        async def check_database() -> None:
+            async with engine.connect() as connection:
+                await connection.execute(text("SELECT 1"))
+
+        await asyncio.wait_for(check_database(), timeout=2.0)
+        checks["database"] = True
+    except Exception:
+        logging.debug("Readiness database check failed", exc_info=True)
+
+    if settings.REDIS_ENABLE:
+        try:
+            if redis.redis_client is not None:
+                checks["redis"] = bool(
+                    await asyncio.wait_for(redis.redis_client.ping(), timeout=2.0)
+                )
+        except Exception:
+            logging.debug("Readiness Redis check failed", exc_info=True)
+    return checks
+
+
+@app.get("/ready")
+async def readiness_check():
+    lifecycle_ready = runtime_health.ready_for_traffic
+    checks = await _readiness_checks() if lifecycle_ready else {
+        "database": False,
+        "redis": False,
+    }
+    is_ready = lifecycle_ready and all(checks.values())
+    return JSONResponse(
+        status_code=200 if is_ready else 503,
+        content={
+            "status": "ready" if is_ready else "not_ready",
+            "checks": checks,
+        },
+        headers={"Cache-Control": "no-store"},
+    )
+
 # --- Documentation Security ---
 
 async def get_current_user_from_cookie(
@@ -366,10 +437,10 @@ async def serve_spa(full_path: str):
     if full_path.startswith("api"):
          raise HTTPException(status_code=404, detail="API Not Found")
 
-    # Check if file exists in frontend_dist (for favicon.ico, favicon.png, etc.)
-    file_path = os.path.join(frontend_dist, full_path)
-    if os.path.exists(file_path) and os.path.isfile(file_path):
-        return FileResponse(file_path)
+    # 仅允许读取 frontend/dist 内的真实文件，阻止绝对路径、目录穿越和符号链接逃逸。
+    file_path = resolve_contained_file(frontend_dist, full_path)
+    if file_path is not None:
+        return FileResponse(str(file_path))
 
     # Serve index.html for all other routes (SPA)
     index_file = os.path.join(frontend_dist, "index.html")

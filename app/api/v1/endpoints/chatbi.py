@@ -297,8 +297,6 @@ async def chatbi_sql_execute(
         user_id = int(session_user_info["user_id"])
         user_dimensions = _chatbi_user_dimensions(session_user_info, user_id)
 
-    is_openclaw_user = bool(_openclaw_openai_username_from_sessionid(body.sessionid))
-    bypass_table_auth = not is_openclaw_user
     dataset_name = await _resolve_direct_sql_dataset_name(
         db,
         sql=body.sql,
@@ -319,7 +317,7 @@ async def chatbi_sql_execute(
         agent_context=None,
         dry_run=False,
         is_admin=user_info.get("role") == "admin",
-        bypass_table_auth=bypass_table_auth,
+        bypass_table_auth=False,
         permission_notice=permission_notice,
     )
 

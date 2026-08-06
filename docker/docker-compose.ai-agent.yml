@@ -15,7 +15,7 @@ services:
     environment:
       # Service Config
       - API_SERVICE_ENV=${API_SERVICE_ENV:-prod}
-      - API_SERVICE_LOG_LEVEL=${API_SERVICE_LOG_LEVEL:-INFO}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
       # 业务默认时区（与系统配置 platform_timezone 默认值一致）
       - TZ=${TZ:-Asia/Shanghai}
       - PLATFORM_TIMEZONE=${PLATFORM_TIMEZONE:-Asia/Shanghai}
@@ -32,25 +32,25 @@ services:
       - MYSQL_PORT=${MYSQL_PORT:-3306}
       - MYSQL_DB=${MYSQL_DB:-nanzi_ai_agent_platform}
       - MYSQL_USER=${MYSQL_USER:-root}
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-root123}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:?MYSQL_PASSWORD must be set}
 
       # PostgreSQL (used when DATABASE_TYPE=postgresql)
       - POSTGRES_HOST=${POSTGRES_HOST:-host.docker.internal}
       - POSTGRES_PORT=${POSTGRES_PORT:-5432}
       - POSTGRES_DB=${POSTGRES_DB:-nanzi_ai_agent_platform}
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-your_password}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
 
       # Redis
       - REDIS_HOST=${REDIS_HOST:-host.docker.internal}
       - REDIS_PORT=${REDIS_PORT:-6379}
       - REDIS_DB=${REDIS_DB:-0}
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-root123}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:?REDIS_PASSWORD must be set}
       - REDIS_ENABLE=${REDIS_ENABLE:-true}
 
       # Security
       - API_SERVICE_API_KEY_HASH_ALGORITHM=${API_SERVICE_API_KEY_HASH_ALGORITHM:-sha256}
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:?ENCRYPTION_KEY must be set}
 
       # Jira Integration
       - JIRA_URL=${JIRA_URL}

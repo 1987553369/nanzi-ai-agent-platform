@@ -203,9 +203,11 @@ const headerMode = ref<'simple' | 'advanced'>('simple')
 const headerPairs = ref<{ key: string, value: string }[]>([{ key: '', value: '' }])
 
 const addHeaderPair = () => {
+  markAuthHeadersDirty()
   headerPairs.value.push({ key: '', value: '' })
 }
 const removeHeaderPair = (index: number) => {
+  markAuthHeadersDirty()
   headerPairs.value.splice(index, 1)
   if (headerPairs.value.length === 0) addHeaderPair()
 }
@@ -217,10 +219,20 @@ const newServer = ref({
   auth_headers: '{}',
   enabled_status: 1
 })
+const existingAuthHeadersConfigured = ref(false)
+const authHeadersDirty = ref(false)
+
+const markAuthHeadersDirty = () => {
+  authHeadersDirty.value = true
+}
 
 // Sync Header Pairs to JSON string
 watch(headerPairs, (newPairs) => {
   if (headerMode.value === 'simple') {
+    if (isEditing.value && existingAuthHeadersConfigured.value && !authHeadersDirty.value) {
+      newServer.value.auth_headers = ''
+      return
+    }
     const obj: Record<string, string> = {}
     newPairs.forEach(p => {
       if (p.key.trim()) obj[p.key.trim()] = p.value
@@ -276,6 +288,8 @@ const resetWizard = () => {
   mcpJsonPasteHint.value = ''
   headerPairs.value = [{ key: '', value: '' }]
   headerMode.value = 'simple'
+  existingAuthHeadersConfigured.value = false
+  authHeadersDirty.value = false
 }
 
 const openEditModal = (server: any) => {
@@ -287,11 +301,14 @@ const openEditModal = (server: any) => {
     props.scope,
     userInfo.value?.user_name,
   )
+  existingAuthHeadersConfigured.value = Boolean(server.has_auth_headers)
+  authHeadersDirty.value = false
+  headerPairs.value = [{ key: '', value: '' }]
   newServer.value = {
     server_name: server.server_name,
     remark: server.remark || '',
     sse_url: server.sse_url,
-    auth_headers: server.auth_headers || '{}',
+    auth_headers: '',
     enabled_status: server.enabled_status
   }
   syncFullServerName()
@@ -311,7 +328,6 @@ const toggleServerStatus = async (server: any, enabled: boolean) => {
       server_name: server.server_name,
       remark: server.remark || '',
       sse_url: server.sse_url,
-      auth_headers: server.auth_headers || '{}',
       enabled_status: nextStatus,
       scope: props.scope,
     })
@@ -443,7 +459,14 @@ const handleVerify = async () => {
   
   verifying.value = true
   try {
-    const res = await axios.post('/api/portal/mcp/verify', newServer.value)
+    const payload: Record<string, unknown> = {
+      ...newServer.value,
+      ...(isEditing.value ? { server_id: editingId.value } : {}),
+    }
+    if (isEditing.value && !newServer.value.auth_headers.trim()) {
+      delete payload.auth_headers
+    }
+    const res = await axios.post('/api/portal/mcp/verify', payload)
     discoveredTools.value = res.data.tools
     wizardStep.value = 2
     if (!normalizeMcpServerNameSuffix(serverNameSuffix.value)) {
@@ -493,13 +516,16 @@ const addServer = async () => {
     showToast('请填写完整信息', 'warning')
     return
   }
-  if (headerMode.value === 'advanced') {
+  if (headerMode.value === 'advanced' && !(isEditing.value && !newServer.value.auth_headers.trim())) {
     try { JSON.parse(newServer.value.auth_headers) }
     catch (e) { showToast('JSON 格式错误', 'error'); return }
   }
 
   try {
-    const payload = { ...newServer.value, scope: props.scope }
+    const payload: Record<string, unknown> = { ...newServer.value, scope: props.scope }
+    if (isEditing.value && !newServer.value.auth_headers.trim()) {
+      delete payload.auth_headers
+    }
     if (isEditing.value) {
       await axios.put(`/api/portal/mcp/servers/${editingId.value}`, payload)
       showToast('更新成功', 'success')
@@ -987,11 +1013,14 @@ onMounted(fetchServers)
                   切换到{{ headerMode === 'simple' ? '高级 JSON' : '可视化列表' }}
                 </button>
               </div>
+              <p v-if="isEditing && existingAuthHeadersConfigured" class="text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded px-2 py-1.5 mb-3">
+                已配置认证信息。留空将保留原凭据；填写新值会覆盖，服务端不会回显旧值。
+              </p>
 
               <div v-if="headerMode === 'simple'" class="space-y-3">
                 <p class="text-[10px] text-gray-400 leading-relaxed">
                   如果服务需要令牌或 API Key，请添加下方项。
-                  <span class="text-primary cursor-pointer hover:underline" @click="headerPairs[0] = {key: 'Authorization', value: 'Bearer '}">[常用推荐：Authorization]</span>
+                  <span class="text-primary cursor-pointer hover:underline" @click="markAuthHeadersDirty(); headerPairs[0] = {key: 'Authorization', value: 'Bearer '}">[常用推荐：Authorization]</span>
                 </p>
               
                 <div class="space-y-2 bg-gray-50 p-3 rounded-lg border border-gray-100 max-h-[150px] overflow-y-auto custom-scrollbar">
@@ -999,13 +1028,16 @@ onMounted(fetchServers)
                     <div class="flex-1">
                       <input 
                         v-model="pair.key" 
+                        @input="markAuthHeadersDirty"
                         placeholder="名称 (如 Authorization)" 
                         class="w-full px-3 py-1.5 text-xs border rounded focus:ring-1 focus:ring-primary outline-none" 
                       />
                     </div>
                     <div class="flex-1">
                       <input 
+                        type="password"
                         v-model="pair.value" 
+                        @input="markAuthHeadersDirty"
                         :placeholder="pair.key === 'Authorization' ? 'Bearer sk-...' : '内容 (Value)'" 
                         class="w-full px-3 py-1.5 text-xs border rounded focus:ring-1 focus:ring-primary outline-none" 
                       />
@@ -1020,7 +1052,7 @@ onMounted(fetchServers)
                 </div>
               </div>
               <div v-else>
-                <textarea v-model="newServer.auth_headers" rows="4" class="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-primary outline-none font-mono bg-gray-900 text-green-400" placeholder='{}'></textarea>
+                <textarea v-model="newServer.auth_headers" @input="markAuthHeadersDirty" rows="4" class="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-primary outline-none font-mono bg-gray-900 text-green-400" placeholder='{}'></textarea>
               </div>
             </div>
           </template>

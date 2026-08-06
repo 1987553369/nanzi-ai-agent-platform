@@ -24,7 +24,7 @@ def _build_settings(**overrides):
         "POSTGRES_USER": "postgres",
         "POSTGRES_PASSWORD": "secret",
         "REDIS_HOST": "localhost",
-        "ENCRYPTION_KEY": "KkJgK_d-1Jda9CAp7iGhRDzuXLYZfnid2siBeIC5lqw=",
+        "ENCRYPTION_KEY": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
     }
     values.update(overrides)
     return Settings(**values)
@@ -34,6 +34,34 @@ def test_database_type_defaults_to_mysql_when_not_configured():
     settings = _build_settings()
 
     assert settings.DATABASE_TYPE == "mysql"
+
+
+def test_runtime_defaults_do_not_contain_credentials_and_log_level_is_configurable():
+    settings = _build_settings(LOG_LEVEL="warning")
+
+    assert settings.SSO_ACCESS_TOKEN == "CHANGE_ME_SSO_ACCESS_TOKEN"
+    assert settings.LOG_LEVEL == "warning"
+
+
+def test_production_rejects_placeholder_security_configuration():
+    settings = _build_settings(
+        API_SERVICE_ENV="production",
+        ENCRYPTION_KEY="GENERATE_A_UNIQUE_FERNET_KEY",
+        SSO_ACCESS_TOKEN="CHANGE_ME_SSO_ACCESS_TOKEN",
+    )
+
+    with pytest.raises(ValueError, match="生产环境禁止使用占位安全配置"):
+        settings.validate_runtime_configuration()
+
+
+def test_development_allows_local_placeholder_configuration():
+    settings = _build_settings(
+        API_SERVICE_ENV="dev",
+        ENCRYPTION_KEY="GENERATE_A_UNIQUE_FERNET_KEY",
+        SSO_ACCESS_TOKEN="CHANGE_ME_SSO_ACCESS_TOKEN",
+    )
+
+    settings.validate_runtime_configuration()
 
 
 def test_database_type_accepts_postgresql_override():
@@ -75,7 +103,7 @@ def test_postgresql_settings_do_not_require_mysql_fields():
         "POSTGRES_USER": "postgres",
         "POSTGRES_PASSWORD": "secret",
         "REDIS_HOST": "localhost",
-        "ENCRYPTION_KEY": "KkJgK_d-1Jda9CAp7iGhRDzuXLYZfnid2siBeIC5lqw=",
+        "ENCRYPTION_KEY": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
     }
 
     settings = Settings(**values)
@@ -92,8 +120,9 @@ def test_mysql_url_reports_missing_selected_fields():
 
 def test_environment_files_document_mysql_default_database_type():
     assert "DATABASE_TYPE=mysql" in (ROOT / "env.example").read_text(encoding="utf-8")
-    dotenv_content = (ROOT / ".env").read_text(encoding="utf-8")
-    assert "DATABASE_TYPE=" in dotenv_content
+    dotenv = ROOT / ".env"
+    if dotenv.exists():
+        assert "DATABASE_TYPE=" in dotenv.read_text(encoding="utf-8")
 
 
 def test_wait_for_services_selects_the_configured_database():

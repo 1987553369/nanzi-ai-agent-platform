@@ -13,6 +13,17 @@ from app.models.mcp import McpServer, McpToolCache
 from app.models.agent import AIAgent, AIAgentVersion
 from app.services.ai.tools.mcp_client import McpClientService, McpSseSession
 from app.services.ai.tools.mcp_factory import McpToolFactory
+from app.utils.mcp_credentials import (
+    McpCredentialError,
+    decrypt_mcp_auth_headers,
+    encrypt_mcp_auth_headers,
+    has_mcp_auth_headers,
+)
+from app.utils.outbound_url_policy import (
+    OutboundUrlPolicyError,
+    validate_outbound_http_url,
+    validate_outbound_url,
+)
 from pydantic import BaseModel, Field, ConfigDict
 
 logger = logging.getLogger(__name__)
@@ -28,7 +39,7 @@ def _clear_runtime_tool_cache() -> None:
 class McpServerBase(BaseModel):
     server_name: str
     sse_url: str
-    auth_headers: Optional[str] = "{}"
+    auth_headers: Optional[str] = None
     enabled_status: Optional[int] = 1
     scope: Optional[str] = "global"
     remark: Optional[str] = Field(default=None, max_length=500)
@@ -38,10 +49,19 @@ def _normalized_remark(value: Optional[str]) -> Optional[str]:
     text = str(value or "").strip()
     return text[:500] if text else None
 
-class McpServerResponse(McpServerBase):
+class McpVerifyRequest(McpServerBase):
+    server_id: Optional[str] = None
+
+
+class McpServerResponse(BaseModel):
     id: str
+    server_name: str
+    sse_url: str
+    enabled_status: int = 1
     scope: str = "global"
+    remark: Optional[str] = None
     user_id: Optional[int] = None
+    has_auth_headers: bool = False
     last_sync_at: Optional[Any] = None
     tool_count: int = 0
     published_tool_count: int = 0
@@ -190,17 +210,30 @@ async def _find_server_with_name(
 
 @router.post("/verify")
 async def verify_mcp_server(
-    data: McpServerBase,
+    data: McpVerifyRequest,
+    db: AsyncSession = Depends(get_db_session),
     user: Dict = Depends(require_api_key)
 ):
     """Test connection and return discovered tools without saving"""
     temp_id = f"verify_{uuid.uuid4().hex[:8]}"
-    auth_headers = {}
-    if data.auth_headers:
-        try: auth_headers = json.loads(data.auth_headers)
-        except: pass
+    try:
+        safe_url = await validate_outbound_url(data.sse_url)
+        if data.auth_headers is not None:
+            auth_headers = decrypt_mcp_auth_headers(data.auth_headers)
+        elif data.server_id:
+            server = (
+                await db.execute(select(McpServer).where(McpServer.id == data.server_id))
+            ).scalar_one_or_none()
+            if not server:
+                raise HTTPException(status_code=404, detail="Server not found")
+            _ensure_server_control_access(server, user)
+            auth_headers = decrypt_mcp_auth_headers(server.auth_headers)
+        else:
+            auth_headers = {}
+    except (McpCredentialError, OutboundUrlPolicyError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    McpClientService._sessions[temp_id] = McpSseSession(temp_id, data.sse_url, auth_headers)
+    McpClientService._sessions[temp_id] = McpSseSession(temp_id, safe_url, auth_headers)
     
     try:
         tools = await McpClientService.list_remote_tools(temp_id)
@@ -265,6 +298,7 @@ async def list_mcp_servers(
         pub_count = (await db.execute(pub_stmt)).scalar() or 0
         
         item = McpServerResponse.model_validate(s)
+        item.has_auth_headers = has_mcp_auth_headers(s.auth_headers)
         item.tool_count = total_count
         item.published_tool_count = pub_count
         item.stale_tool_count = stale_count
@@ -304,6 +338,11 @@ async def create_mcp_server(
 
     server_id = str(uuid.uuid4())
     server_data = data.model_dump()
+    try:
+        server_data["sse_url"] = validate_outbound_http_url(data.sse_url)
+        server_data["auth_headers"] = encrypt_mcp_auth_headers(data.auth_headers)
+    except (McpCredentialError, OutboundUrlPolicyError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     server_data["server_name"] = server_name
     server_data["remark"] = _normalized_remark(data.remark)
     server_data["scope"] = target_scope
@@ -324,7 +363,18 @@ async def create_mcp_server(
     except Exception as e:
         logger.warning(f"Initial sync failed for new server {server_id}: {e}")
         
-    return {**server_data, "id": server_id, "tool_count": 0, "published_tool_count": 0}
+    return {
+        "id": server_id,
+        "server_name": server_name,
+        "sse_url": server_data["sse_url"],
+        "enabled_status": server_data.get("enabled_status") or 1,
+        "scope": target_scope,
+        "remark": server_data.get("remark"),
+        "user_id": user_id,
+        "has_auth_headers": has_mcp_auth_headers(server_data.get("auth_headers")),
+        "tool_count": 0,
+        "published_tool_count": 0,
+    }
 
 @router.put("/servers/{server_id}", response_model=McpServerResponse)
 async def update_mcp_server(
@@ -367,8 +417,12 @@ async def update_mcp_server(
     if server.server_name != server_name:
         await _migrate_server_name_references(db, server_id, server.server_name, server_name)
     server.server_name = server_name
-    server.sse_url = data.sse_url
-    server.auth_headers = data.auth_headers
+    try:
+        server.sse_url = validate_outbound_http_url(data.sse_url)
+        if data.auth_headers is not None:
+            server.auth_headers = encrypt_mcp_auth_headers(data.auth_headers)
+    except (McpCredentialError, OutboundUrlPolicyError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     server.enabled_status = data.enabled_status
     # 启用/禁用等局部更新可能不传 remark，避免误清空
     if "remark" in data.model_fields_set:
@@ -399,13 +453,15 @@ async def update_mcp_server(
     )
     pub = (await db.execute(pub_stmt)).scalar() or 0
     
-    response_data = data.model_dump()
-    response_data["server_name"] = server_name
     return {
-        **response_data,
         "id": server_id,
+        "server_name": server_name,
+        "sse_url": server.sse_url,
+        "enabled_status": server.enabled_status,
         "scope": server.scope,
+        "remark": server.remark,
         "user_id": server.user_id,
+        "has_auth_headers": has_mcp_auth_headers(server.auth_headers),
         "tool_count": total,
         "published_tool_count": pub,
         "stale_tool_count": stale,

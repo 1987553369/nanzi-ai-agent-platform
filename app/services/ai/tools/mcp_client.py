@@ -3,12 +3,15 @@ import logging
 import asyncio
 import time
 import uuid
+import inspect
 from typing import Dict, Any, List, Optional, Tuple
 import httpx
 from mcp import ClientSession, types
 from mcp.client.sse import sse_client
 from app.core.orm import AsyncSessionLocal
 from app.models.mcp import McpServer, McpToolCache
+from app.utils.mcp_credentials import decrypt_mcp_auth_headers
+from app.utils.outbound_url_policy import OutboundUrlPolicyError, validate_outbound_url
 from sqlalchemy import select, update
 
 logger = logging.getLogger(__name__)
@@ -34,8 +37,11 @@ class McpSseSession:
     async def _looks_like_sse_endpoint(self) -> bool:
         """Quick probe: skip SSE when the gateway clearly speaks JSON/HTTP."""
         try:
-            async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
+            await validate_outbound_url(self.sse_url)
+            async with httpx.AsyncClient(timeout=5.0, follow_redirects=False, trust_env=False) as client:
                 response = await client.get(self.sse_url, headers=self.auth_headers)
+            if 300 <= response.status_code < 400:
+                raise OutboundUrlPolicyError("MCP 服务不允许 HTTP 重定向")
             content_type = (response.headers.get("content-type") or "").lower()
             if "text/event-stream" in content_type:
                 return True
@@ -48,6 +54,8 @@ class McpSseSession:
                 return False
             # Unknown type: still try SSE for legacy gateways.
             return True
+        except OutboundUrlPolicyError:
+            raise
         except Exception as probe_err:
             logger.info(
                 "[MCP] SSE probe skipped for %s due to %s; trying SSE anyway",
@@ -65,11 +73,8 @@ class McpSseSession:
             # Debug: Log header keys (redacted)
             header_keys = list(self.auth_headers.keys())
             logger.info(f"[MCP] Connecting to {self.server_id} at {self.sse_url}. Headers keys present: {header_keys}")
-            if "Authorization" in self.auth_headers:
-                logger.info(f"[MCP] Auth Value (first 10 chars): {self.auth_headers['Authorization'][:10]}...")
-
-            
             try:
+                await validate_outbound_url(self.sse_url)
                 from contextlib import AsyncExitStack
                 self._exit_stack = AsyncExitStack()
 
@@ -79,8 +84,28 @@ class McpSseSession:
                 if try_sse:
                     try:
                         async def _connect_sse():
+                            if "httpx_client_factory" not in inspect.signature(sse_client).parameters:
+                                raise RuntimeError("当前 MCP SDK 不支持安全 HTTP Client 注入")
+
+                            async def validate_request(request: httpx.Request) -> None:
+                                await validate_outbound_url(str(request.url))
+
+                            def safe_httpx_client_factory(*, headers=None, timeout=None, auth=None):
+                                return httpx.AsyncClient(
+                                    headers=headers,
+                                    timeout=timeout,
+                                    auth=auth,
+                                    follow_redirects=False,
+                                    trust_env=False,
+                                    event_hooks={"request": [validate_request]},
+                                )
+
                             read_stream, write_stream = await self._exit_stack.enter_async_context(
-                                sse_client(url=self.sse_url, headers=self.auth_headers)
+                                sse_client(
+                                    url=self.sse_url,
+                                    headers=self.auth_headers,
+                                    httpx_client_factory=safe_httpx_client_factory,
+                                )
                             )
                             self.session = await self._exit_stack.enter_async_context(
                                 ClientSession(read_stream, write_stream)
@@ -147,7 +172,7 @@ class McpClientService:
                 result = await db.execute(select(McpServer).where(McpServer.id == server_id))
                 server = result.scalar_one_or_none()
                 if not server: raise ValueError(f"MCP Server {server_id} not found")
-                headers = json.loads(server.auth_headers) if server.auth_headers else {}
+                headers = decrypt_mcp_auth_headers(server.auth_headers)
                 cls._sessions[server_id] = McpSseSession(server_id, server.sse_url, headers)
 
         session = cls._sessions[server_id]
@@ -368,11 +393,8 @@ class McpClientService:
             payload["id"] = rpc_id
 
         logger.debug(f"[MCP-Direct] Request: {method} to {session_mgr.sse_url} | RPC ID: {rpc_id} | Headers keys: {list(headers.keys())}")
-        if "Authorization" in headers:
-             logger.info(f"[MCP-Direct] Sending Authorization: {headers['Authorization'][:15]}...")
-
-
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        await validate_outbound_url(session_mgr.sse_url)
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=False, trust_env=False) as client:
             try:
                 resp = await client.post(session_mgr.sse_url, json=payload, headers=headers)
                 logger.info(f"[MCP-Direct] Response from {method}: HTTP {resp.status_code}")

@@ -7,7 +7,7 @@ from sqlalchemy.engine.url import URL
 class Settings(BaseSettings):
     API_SERVICE_ENV: str = "dev"
     API_SERVICE_PORT: int = 8001
-    LOG_LEVEL: str = "INFO"  # Aligned with .env
+    LOG_LEVEL: str = "INFO"
     ALLOWED_ORIGINS: List[str] = ["*"]
     APP_PUBLIC_URL: Optional[str] = None
 
@@ -63,10 +63,29 @@ class Settings(BaseSettings):
 
     # SSO Configuration
     SSO_API_URL: str = "https://yovole.net/api/v1/user/check/login"
-    SSO_ACCESS_TOKEN: str = "laplace"
+    # Never ship a usable SSO credential in source. Deployments must inject it.
+    SSO_ACCESS_TOKEN: str = "CHANGE_ME_SSO_ACCESS_TOKEN"
     SSO_REQUEST_SYSTEM: str = "NANZI_AI_AGENT_PLATFORM"
     SSO_REQUEST_BUSINESS: str = "USER-LOGIN"
     SSO_TIMEOUT: int = 30
+
+    def validate_runtime_configuration(self) -> None:
+        """Reject unusable placeholder secrets before a production process serves traffic."""
+        if self.API_SERVICE_ENV.strip().lower() not in {"prod", "production"}:
+            return
+
+        required_values = {
+            "ENCRYPTION_KEY": self.ENCRYPTION_KEY,
+            "SSO_ACCESS_TOKEN": self.SSO_ACCESS_TOKEN,
+        }
+        errors = [
+            f"{name} 未配置"
+            for name, value in required_values.items()
+            if not str(value or "").strip()
+            or str(value).strip().startswith(("CHANGE_ME_", "GENERATE_A_"))
+        ]
+        if errors:
+            raise ValueError("生产环境禁止使用占位安全配置: " + ", ".join(errors))
 
     @property
     def SKILLS_DIR(self) -> str:

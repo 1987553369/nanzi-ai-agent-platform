@@ -30,33 +30,22 @@ sequenceDiagram
     H->>W: SEND_COMMAND (触发指令)
 ```
 
-## 0. 获取认证 Token (Authentication)
+## 0. 认证凭据与上线前提
 
-在集成组件前，您需要获取一个有效的认证 Token（即系统中的 **API Key**）。根据集成场景不同，有以下几种获取方式：
+同源 Portal 应使用平台登录后签发的 HttpOnly 会话 Cookie，不应通过 `postMessage` 再传递 `localStorage` 中的 API Key。
 
-### 方式一：管理后台手动获取 (个人集成)
-1. 登录南孜智能体平台管理后台。
-2. 进入 **“个人中心”**。
-3. 在 “API Key” 栏位点击查看并复制。
+第三方系统生产接入必须使用服务端签发的短期、限受众、限 Agent 的 Embed Token。当前版本尚未提供完整的 Embed Token 签发与撤销接口，因此第三方跨域嵌入在该能力上线前只允许测试，不应进入生产。
 
-### 方式二：通过登录接口获取 (自动集成)
-如果您的系统需要模拟用户登录来获取 Token：
-- **Endpoint**: `POST /api/portal/auth/login`
-- **Payload**: `{"username": "...", "password": "..."}`
-- **Response**: `data.api_key` 即为 Token。
+禁止在浏览器集成代码中：
 
-### 方式三：系统间集成获取 (Server-to-Server)
-**推荐用于第三方门户系统集成**。如果您的系统已经过认证（持有具备权限的 API Key），可以代表目标用户获取其 Token：
-- **Endpoint**: `GET /api/v1/users/profile?username={target_username}`
-- **鉴权**: 请求头需携带调用方系统的 `X-API-Key` 或 `Authorization`。
-- **权限要求**: 调用者必须具备 `api:GET:/api/v1/users/profile` 权限。
-- **Response**: `data.data.api_key` 即为该目标用户的 Token。
-
-> **注意**：API Key 是持久有效的（除非手动重置），非常适合作为 IFrame 嵌入的凭证。
+- 将长期 API Key 写入 iframe URL、页面源码或前端配置；
+- 使用管理员 API Key 代表普通用户；
+- 从用户资料接口获取并下发其他用户的长期 API Key；
+- 将密码提交给第三方门户，由第三方门户代为登录。
 
 ## 1. 快速开始 (Quick Start)
 
-### 方式一：直接 IFrame 嵌入 (MVP)
+### 方式一：直接 IFrame 嵌入（仅限本地测试）
 
 在您的 HTML 页面中插入以下代码即可快速预览。此方式通过 URL 参数直接传递配置：
 
@@ -80,7 +69,7 @@ sequenceDiagram
 | `instance_id` | 否 | 多实例标识符。若页面嵌入多个组件，需以此区分消息来源。 |
 | `routing_mode` | 否 | 路由模式配置（如强制开启多智能体模式等）。 |
 
-> **注意**：URL 参数传递 Token 仅建议用于测试或内网低风险环境。生产环境推荐使用 `postMessage` 方式动态传递 Token。
+> **警告**：URL Token 会进入浏览器历史、代理日志、Referer 和监控系统。内网不等于安全环境；该方式不得用于生产。
 
 
 ---
@@ -111,12 +100,16 @@ sequenceDiagram
 所有的双向通信消息均遵循以下格式：
 *   **组件发出**：消息对象中固定包含 `{ source: "nanzi-agent-embed" }`。
 *   **宿主发出**：若初始化时指定了 `instance_id`，后续所有指令必须携带该 ID。
+*   **协议字段**：双向消息必须包含 `protocol_version: 1` 和本次 iframe 加载生成的 `handshake_nonce`。
+*   **来源校验**：宿主必须同时校验 `event.source === widgetFrame.contentWindow` 和精确 `event.origin`；组件只接受 `window.parent` 且 Origin 与 `document.referrer` 一致的消息。
+*   **发送目标**：`postMessage` 的 `targetOrigin` 必须是精确 Origin，禁止使用 `"*"`。
+*   **Referrer**：不要为 iframe 设置 `no-referrer`；跨域时至少保留 Origin，以便组件绑定宿主来源。
 
 ### 3.2 初始化流程
 
-1. 宿主加载 IFrame（src 不带敏感 token）。
+1. 宿主生成随机 `handshake_nonce`，把 `parent_origin` 和 nonce 写入 iframe URL；URL 不携带敏感 Token。
 2. 组件加载完成，向父窗口发送 `NANZI_WIDGET_READY`。
-3. 宿主收到就绪信号，发送 `INIT_CONFIG`（携带 Token、用户信息、业务上下文等）。
+3. 宿主完成 Source、Origin、协议版本和 nonce 校验后，发送 `INIT_CONFIG`。同源 Portal 不传 Token；第三方生产接入只能传短期 Embed Token。
 4. 组件鉴权成功并完成初始化，返回 `INIT_SUCCESS`。
 
 ### 3.3 协议详解
@@ -152,19 +145,29 @@ sequenceDiagram
 ```javascript
 /* 宿主系统逻辑示例 */
 const widgetFrame = document.getElementById('ai-widget-frame');
+const targetOrigin = 'https://agent.example.com';
+const protocolVersion = 1;
+const handshakeNonce = crypto.randomUUID();
+
+const frameUrl = new URL('/embed/chat', targetOrigin);
+frameUrl.searchParams.set('parent_origin', window.location.origin);
+frameUrl.searchParams.set('handshake_nonce', handshakeNonce);
+widgetFrame.src = frameUrl.toString();
 
 window.addEventListener('message', (event) => {
-  const data = event.data;
-  
-  // 必须通过 source 标识进行过滤
+  if (event.source !== widgetFrame.contentWindow || event.origin !== targetOrigin) return;
+  const data = event.data || {};
   if (data.source !== 'nanzi-agent-embed') return;
+  if (data.protocol_version !== protocolVersion || data.handshake_nonce !== handshakeNonce) return;
 
   switch (data.type) {
     case 'NANZI_WIDGET_READY':
       // 发送初始化配置
       widgetFrame.contentWindow.postMessage({
         type: 'INIT_CONFIG',
-        token: 'YOUR_JWT_TOKEN',
+        protocol_version: protocolVersion,
+        handshake_nonce: handshakeNonce,
+        token: 'SHORT_LIVED_EMBED_TOKEN',
         agent_id: 'sys-agent-chatbi',
         user_info: {
           user_id: 'U123',
@@ -178,7 +181,7 @@ window.addEventListener('message', (event) => {
         styleVars: {
           '--primary-color': '#ff4d4f' // 使用红色品牌色
         }
-      }, '*');
+      }, targetOrigin);
       break;
       
     case 'INIT_SUCCESS':

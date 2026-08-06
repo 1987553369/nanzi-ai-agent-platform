@@ -1,9 +1,22 @@
 import MarkdownIt from 'markdown-it'
+import DOMPurify from 'dompurify'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github.css' // Base styles
 
+const MARKDOWN_URI_PATTERN = /^(?:(?:https?|mailto|tel|quick|canvas|blob):|data:image\/(?:png|gif|jpe?g|webp);base64,|(?:[^a-z]|[a-z0-9._~-]+(?:[/?#]|$)))/i
+
+export const sanitizeMarkdownHtml = (html: string): string => {
+  return DOMPurify.sanitize(html, {
+    USE_PROFILES: { html: true },
+    ALLOW_DATA_ATTR: true,
+    FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'form', 'input', 'button', 'textarea', 'select', 'option'],
+    FORBID_ATTR: ['style'],
+    ALLOWED_URI_REGEXP: MARKDOWN_URI_PATTERN,
+  }) as string
+}
+
 const md: MarkdownIt = new MarkdownIt({
-  html: true,
+  html: false,
   linkify: true,
   typographer: true,
   highlight: null
@@ -124,12 +137,12 @@ const normalizePipeTables = (content: string) => {
 };
 
 export const renderMarkdown = (content: string) => {
-  return md.render(normalizePipeTables(content))
+  return sanitizeMarkdownHtml(md.render(normalizePipeTables(content)))
 }
 
 /** 画布/预览场景：保留单行换行，便于 .md 纯文本阅读 */
 const mdPreview = new MarkdownIt({
-  html: true,
+  html: false,
   linkify: true,
   typographer: true,
   breaks: true,
@@ -139,5 +152,5 @@ mdPreview.renderer.rules.fence = md.renderer.rules.fence!
 mdPreview.validateLink = md.validateLink
 
 export const renderMarkdownPreview = (content: string) => {
-  return mdPreview.render(normalizePipeTables(content))
+  return sanitizeMarkdownHtml(mdPreview.render(normalizePipeTables(content)))
 }

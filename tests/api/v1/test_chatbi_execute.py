@@ -224,6 +224,7 @@ async def test_chatbi_execute_passes_explicit_dataset_name(monkeypatch):
 
     assert captured["dataset_name"] == "sales_dataset"
     assert captured["user_dimensions"]["dept_code"] == "D001"
+    assert captured["bypass_table_auth"] is False
 
 
 @pytest.mark.asyncio

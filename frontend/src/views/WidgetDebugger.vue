@@ -157,13 +157,12 @@
                     <div class="font-mono text-xs text-gray-700 truncate bg-gray-50 border border-gray-100 rounded-md px-2 py-2">{{ integrationHost }}</div>
                   </div>
                   <div class="min-w-0">
-                    <div class="text-xs font-black text-gray-400 uppercase tracking-wider mb-1">API Key</div>
+                    <div class="text-xs font-black text-gray-400 uppercase tracking-wider mb-1">Embed Token</div>
                     <div
-                      class="font-mono text-xs truncate border rounded-md px-2 py-2"
-                      :class="integrationHasRealApiKey ? 'text-emerald-700 bg-emerald-50 border-emerald-100' : 'text-amber-700 bg-amber-50 border-amber-100'"
-                      :title="integrationHasRealApiKey ? integrationApiKey : '当前浏览器未读取到登录 API Key，将使用占位值'"
+                      class="font-mono text-xs truncate border rounded-md px-2 py-2 text-amber-700 bg-amber-50 border-amber-100"
+                      title="生产接入必须由服务端替换为短期 Embed Token"
                     >
-                      {{ integrationHasRealApiKey ? maskApiKey(integrationApiKey) : integrationApiKey }}
+                      {{ integrationApiKey }}
                     </div>
                   </div>
                   <div class="min-w-0 lg:col-span-2">
@@ -188,7 +187,7 @@
                 </div>
                 <div class="mt-3 flex flex-wrap items-center gap-2 text-xs text-gray-500">
                   <span class="px-2 py-1 rounded bg-gray-50 border border-gray-100">当前生成：{{ integrationAgentMode === 'auto' ? '不传 agent_id，由平台自动路由' : `指定 ${selectedIntegrationAgentLabel}` }}</span>
-                  <span v-if="!integrationHasRealApiKey" class="px-2 py-1 rounded bg-amber-50 border border-amber-100 text-amber-700">未读到本地 API Key，复制前请先登录或手动替换占位值</span>
+                  <span class="px-2 py-1 rounded bg-amber-50 border border-amber-100 text-amber-700">复制后由服务端注入短期凭据，禁止使用长期 API Key</span>
                 </div>
               </div>
               <div class="grid grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)] gap-5">
@@ -322,6 +321,11 @@
     import axios from '../utils/axios';
     import { useToast } from '../composables/useToast';
     import { copyToClipboard } from '../utils/clipboard';
+    import {
+        createEmbedHandshakeNonce,
+        createEmbedMessage,
+        isTrustedEmbedMessage,
+    } from '../utils/embedProtocol';
 
     interface IntegrationTab {
         id: string;
@@ -342,6 +346,8 @@
 	const widgetFrame = ref<HTMLIFrameElement | null>(null);
 	const logs = ref<string[]>([]);
 	const iframeUrl = ref('');
+    const widgetTargetOrigin = window.location.origin;
+    let widgetHandshakeNonce = createEmbedHandshakeNonce();
     const showIntegrationGuide = ref(false);
     const activeIntegrationTab = ref('iframe');
     const { showToast } = useToast();
@@ -363,8 +369,7 @@ const contextPayload = ref('{\n  "user_name": "陈小龙",\n  "user_dept": "数�
     const integrationHost = computed(() => {
         return typeof window !== 'undefined' ? window.location.origin : '';
     });
-    const integrationApiKey = computed(() => config.token.trim() || 'CURRENT_USER_API_KEY');
-    const integrationHasRealApiKey = computed(() => Boolean(config.token.trim()));
+    const integrationApiKey = computed(() => 'SHORT_LIVED_EMBED_TOKEN');
     const selectedIntegrationAgent = computed(() => {
         return integrationAgents.value.find((agent) => agent.id === selectedIntegrationAgentId.value);
     });
@@ -374,10 +379,6 @@ const contextPayload = ref('{\n  "user_name": "陈小龙",\n  "user_dept": "数�
         return `${agent.display_name || agent.name} (${agent.id})`;
     });
 
-    const maskApiKey = (key: string) => {
-        if (key.length <= 12) return key;
-        return `${key.slice(0, 6)}...${key.slice(-4)}`;
-    };
     const resolveStoredApiKey = () => {
         const directKey = localStorage.getItem('api_key') || localStorage.getItem('yovole_token');
         if (directKey) return directKey;
@@ -410,18 +411,18 @@ const contextPayload = ref('{\n  "user_name": "陈小龙",\n  "user_dept": "数�
         const theme = config.theme || 'light';
         const agentQueryParam = buildAgentQueryParam();
         const agentInitLine = buildAgentInitLine();
-        const tokenPoint = integrationHasRealApiKey.value ? '已带入当前登录用户 API Key' : '当前浏览器没有明文 API Key 时会保留占位值';
+        const tokenPoint = '生产环境仅允许服务端签发的短期 Embed Token';
 
         return [
         {
             id: 'iframe',
-            label: '快速 IFrame',
+            label: 'IFrame 直嵌（测试）',
             title: '直接通过 URL 参数嵌入',
             caption: '适合内网测试、Demo 页面或快速验证 Agent 能否打开。',
             summary: integrationAgentMode.value === 'auto'
                 ? '把 /embed/chat 放进 iframe，仅传 token 和 theme，由平台自动路由智能体。'
                 : '把 /embed/chat 放进 iframe，通过 URL 参数传递 token、agent_id、theme。',
-            points: ['实现最快', tokenPoint, integrationAgentMode.value === 'auto' ? '不传 agent_id 时自动路由' : '已传入当前选中的真实 Agent ID', '生产环境不推荐在 URL 中暴露 Token'],
+            points: ['仅用于本地联调', tokenPoint, integrationAgentMode.value === 'auto' ? '不传 agent_id 时自动路由' : '已传入当前选中的真实 Agent ID', '生产环境禁止在 URL 中暴露 Token'],
             code: `<iframe
   src="${host}/embed/chat?token=${encodedToken}${agentQueryParam}&theme=${encodeURIComponent(theme)}"
   width="100%"
@@ -448,15 +449,24 @@ const contextPayload = ref('{\n  "user_name": "陈小龙",\n  "user_dept": "数�
 <script>
 const frame = document.getElementById('nanzi-agent-frame');
 const targetOrigin = '${host}';
+const protocolVersion = 1;
+const handshakeNonce = crypto.randomUUID();
+const frameUrl = new URL(frame.src);
+frameUrl.searchParams.set('parent_origin', window.location.origin);
+frameUrl.searchParams.set('handshake_nonce', handshakeNonce);
+frame.src = frameUrl.toString();
 
 window.addEventListener('message', (event) => {
-  if (event.origin !== targetOrigin) return;
+  if (event.source !== frame.contentWindow || event.origin !== targetOrigin) return;
   const data = event.data || {};
   if (data.source !== 'nanzi-agent-embed') return;
+  if (data.protocol_version !== protocolVersion || data.handshake_nonce !== handshakeNonce) return;
 
   if (data.type === 'NANZI_WIDGET_READY') {
     frame.contentWindow.postMessage({
       type: 'INIT_CONFIG',
+      protocol_version: protocolVersion,
+      handshake_nonce: handshakeNonce,
       instance_id: 'ops-assistant',
       token: '${escapeJsString(token)}',${agentInitLine}
       theme: '${escapeJsString(theme)}',
@@ -561,6 +571,12 @@ window.addEventListener('message', (event) => {
 const shell = document.getElementById('nanzi-widget-shell');
 const frame = document.getElementById('nanzi-agent-frame');
 const targetOrigin = '${host}';
+const protocolVersion = 1;
+const handshakeNonce = crypto.randomUUID();
+const frameUrl = new URL(frame.src);
+frameUrl.searchParams.set('parent_origin', window.location.origin);
+frameUrl.searchParams.set('handshake_nonce', handshakeNonce);
+frame.src = frameUrl.toString();
 
 document.getElementById('nanzi-widget-toggle').onclick = () => {
   shell.classList.remove('collapsed');
@@ -570,13 +586,16 @@ document.getElementById('nanzi-widget-collapse').onclick = () => {
 };
 
 window.addEventListener('message', (event) => {
-  if (event.origin !== targetOrigin) return;
+  if (event.source !== frame.contentWindow || event.origin !== targetOrigin) return;
   const data = event.data || {};
   if (data.source !== 'nanzi-agent-embed') return;
+  if (data.protocol_version !== protocolVersion || data.handshake_nonce !== handshakeNonce) return;
 
   if (data.type === 'NANZI_WIDGET_READY') {
     frame.contentWindow.postMessage({
       type: 'INIT_CONFIG',
+      protocol_version: protocolVersion,
+      handshake_nonce: handshakeNonce,
       instance_id: 'floating-ai',
       token: '${escapeJsString(token)}',${agentInitLine}
       theme: '${escapeJsString(theme)}'
@@ -595,9 +614,13 @@ window.addEventListener('message', (event) => {
             code: `const frame = document.getElementById('nanzi-agent-frame');
 const targetOrigin = '${host}';
 const instanceId = 'ticket-sidebar-ai';
+const protocolVersion = 1;
+const handshakeNonce = crypto.randomUUID();
 
 function postToAgent(message) {
   frame.contentWindow.postMessage({
+    protocol_version: protocolVersion,
+    handshake_nonce: handshakeNonce,
     instance_id: instanceId,
     ...message
   }, targetOrigin);
@@ -680,8 +703,11 @@ const isExpanded = ref(true);
     };
 
 const connect = () => {
-    // Start without params to simulate full handshake
-    iframeUrl.value = '/embed/chat'; 
+    widgetHandshakeNonce = createEmbedHandshakeNonce();
+    const embedUrl = new URL('/embed/chat', widgetTargetOrigin);
+    embedUrl.searchParams.set('parent_origin', widgetTargetOrigin);
+    embedUrl.searchParams.set('handshake_nonce', widgetHandshakeNonce);
+    iframeUrl.value = `${embedUrl.pathname}${embedUrl.search}`;
     log('Loading IFrame...');
 };
 
@@ -696,8 +722,10 @@ const postMsg = (type: string, payload: any = {}) => {
         return;
     }
     
-    // In production, targetOrigin should be specific
-    widgetFrame.value.contentWindow.postMessage({ type, ...payload }, '*');
+    widgetFrame.value.contentWindow.postMessage(
+        createEmbedMessage({ type, ...payload }, widgetHandshakeNonce),
+        widgetTargetOrigin,
+    );
     log(`TX: ${type}`);
 };
 
@@ -744,6 +772,12 @@ const toggleExpand = () => {
 
 // Listen for UPSTREAM messages
 const handleMessage = (event: MessageEvent) => {
+    if (!isTrustedEmbedMessage(
+        event,
+        widgetFrame.value?.contentWindow || null,
+        widgetTargetOrigin,
+        widgetHandshakeNonce,
+    )) return;
     const data = event.data;
     if (data.source === 'nanzi-agent-embed') {
         log(`RX: ${data.type}`);

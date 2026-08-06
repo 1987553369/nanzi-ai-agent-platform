@@ -41,20 +41,25 @@ def test_is_v1_api_whitelisted():
     from app.core.v1_api_access import is_v1_api_whitelisted
 
     assert is_v1_api_whitelisted("/api/v1/chat/completions") is True
+    assert is_v1_api_whitelisted("/api/v1/chat/code-executions/stream") is False
+    assert is_v1_api_whitelisted("/api/v1/chat/code-executions/run-1/stop") is False
     assert is_v1_api_whitelisted("/api/v1/chatbi/sql/execute") is False
     assert is_v1_api_whitelisted("/api/v1/tasks/123") is True
     assert is_v1_api_whitelisted("/api/v1/users/profile") is False
+    assert is_v1_api_whitelisted("/api/v1/users/chat-settings") is False
 
 
-def test_assignable_v1_api_resources_constant_has_three_entries():
+def test_assignable_v1_api_resources_include_high_risk_code_execution_permissions():
     from app.core.v1_api_access import ASSIGNABLE_V1_API_RESOURCES
 
-    assert len(ASSIGNABLE_V1_API_RESOURCES) == 3
+    assert len(ASSIGNABLE_V1_API_RESOURCES) == 5
     ids = {item["id"] for item in ASSIGNABLE_V1_API_RESOURCES}
     assert ids == {
         "GET:/api/v1/users/profile",
         "POST:/api/v1/schema",
         "POST:/api/v1/chatbi/sql/execute",
+        "POST:/api/v1/chat/code-executions/stream",
+        "POST:/api/v1/chat/code-executions/{execution_id}/stop",
     }
 
 
@@ -63,10 +68,21 @@ def test_get_assignable_v1_api_resources_returns_static_list():
 
     apis = get_assignable_v1_api_resources()
 
-    assert len(apis) == 3
+    assert len(apis) == 5
     assert {api["id"] for api in apis} == {
         "GET:/api/v1/users/profile",
         "POST:/api/v1/schema",
         "POST:/api/v1/chatbi/sql/execute",
+        "POST:/api/v1/chat/code-executions/stream",
+        "POST:/api/v1/chat/code-executions/{execution_id}/stop",
     }
     assert apis[0] is not get_assignable_v1_api_resources()[0]
+
+
+def test_v1_api_admin_bypass_requires_admin_role():
+    from app.core.v1_api_access import has_v1_api_admin_bypass
+
+    assert has_v1_api_admin_bypass({"role": "admin"}) is True
+    assert has_v1_api_admin_bypass({"role": "ADMIN"}) is True
+    assert has_v1_api_admin_bypass({"role": "user"}) is False
+    assert has_v1_api_admin_bypass(None) is False

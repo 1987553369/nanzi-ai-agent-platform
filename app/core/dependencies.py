@@ -106,6 +106,12 @@ async def verify_v1_api_access(
     if not request.scope.get("route"):
         return user_info
 
+    # 管理员仍需经过身份认证，但不要求逐项分配外部 API 资源权限。
+    from app.core.v1_api_access import has_v1_api_admin_bypass
+
+    if has_v1_api_admin_bypass(user_info):
+        return user_info
+
     resource_id, path_template = resolve_v1_api_resource_id(request)
 
     # Whitelist Core Endpoints (Allow all authenticated users)
@@ -128,7 +134,5 @@ async def verify_v1_api_access(
         )
 
     return user_info
-
-
 
 

@@ -1,10 +1,11 @@
 import requests
 import json
 import sys
+import os
 
 def test_kb_search():
     url = "http://localhost:8001/api/v1/chat/completions"
-    api_key = "5BYfsKWhU_Cfx83cuo8E0kd4AtEhlUHDVlKwwR2kN-c"
+    api_key = os.environ["NANZI_TEST_API_KEY"]
     
     payload = {
         "agent_id": "knowledge-base",

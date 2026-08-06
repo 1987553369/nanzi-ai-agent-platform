@@ -32,6 +32,22 @@ ASSIGNABLE_V1_API_RESOURCES: list[dict[str, str]] = [
         "method": "POST",
         "path": "/api/v1/chatbi/sql/execute",
     },
+    {
+        "id": "POST:/api/v1/chat/code-executions/stream",
+        "name": "运行聊天代码块",
+        "description": "高风险能力：运行聊天代码块；生产环境必须配置隔离执行 Worker。",
+        "group": "V1 代码执行",
+        "method": "POST",
+        "path": "/api/v1/chat/code-executions/stream",
+    },
+    {
+        "id": "POST:/api/v1/chat/code-executions/{execution_id}/stop",
+        "name": "停止代码执行",
+        "description": "停止当前用户已经启动的代码执行实例。",
+        "group": "V1 代码执行",
+        "method": "POST",
+        "path": "/api/v1/chat/code-executions/{execution_id}/stop",
+    },
 ]
 
 
@@ -108,11 +124,22 @@ def _match_v1_route_path(request: Request) -> str | None:
 
 
 def is_v1_api_whitelisted(path: str) -> bool:
-    if "/chat" in path and not path.startswith(f"{V1_API_PREFIX}/chatbi"):
+    normalized_path = "/" + str(path or "").lstrip("/")
+    chat_root = f"{V1_API_PREFIX}/chat"
+    code_execution_root = f"{chat_root}/code-executions"
+
+    if normalized_path == code_execution_root or normalized_path.startswith(f"{code_execution_root}/"):
+        return False
+    if normalized_path == chat_root or normalized_path.startswith(f"{chat_root}/"):
         return True
-    if "/tasks" in path:
+    tasks_root = f"{V1_API_PREFIX}/tasks"
+    if normalized_path == tasks_root or normalized_path.startswith(f"{tasks_root}/"):
         return True
     return False
+
+
+def has_v1_api_admin_bypass(user_info: dict | None) -> bool:
+    return str((user_info or {}).get("role") or "").strip().lower() == "admin"
 
 
 def build_api_permission_alias_map(app: FastAPI) -> dict[str, str]:

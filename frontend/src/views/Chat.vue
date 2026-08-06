@@ -44,6 +44,11 @@ import {
     createSavedReportOpenMessage,
     type SavedReportOpenRequest,
 } from '../utils/savedReportOpenProtocol';
+import {
+    createEmbedHandshakeNonce,
+    createEmbedMessage,
+    isTrustedEmbedMessage,
+} from '../utils/embedProtocol';
 
 const route = useRoute();
 const router = useRouter();
@@ -54,6 +59,8 @@ const loading = ref(true);
 const isInitTimedOut = ref(false);
 const widgetReady = ref(false);
 let timeoutTimer: any = null;
+const embedTargetOrigin = window.location.origin;
+let embedHandshakeNonce = createEmbedHandshakeNonce();
 /** 挂件主动新开会话后清 URL 钉选时，跳过一次 query watch 触发的 INIT，避免重复初始化 */
 let skipNextQueryInit = false;
 
@@ -64,8 +71,11 @@ const parseSavedReportDetailTab = (value: unknown): SavedReportOpenRequest["deta
 };
 
 const initChat = () => {
-    // 基础路径
-    iframeUrl.value = '/embed/chat';
+    embedHandshakeNonce = createEmbedHandshakeNonce();
+    const embedUrl = new URL('/embed/chat', embedTargetOrigin);
+    embedUrl.searchParams.set('parent_origin', embedTargetOrigin);
+    embedUrl.searchParams.set('handshake_nonce', embedHandshakeNonce);
+    iframeUrl.value = `${embedUrl.pathname}${embedUrl.search}`;
     
     // 设置超时检测 (5秒)
     isInitTimedOut.value = false;
@@ -79,7 +89,6 @@ const initChat = () => {
 
 const sendInitConfig = () => {
     const userInfoStr = localStorage.getItem('user_info');
-    const apiKey = localStorage.getItem('api_key');
     
     if (userInfoStr && chatFrame.value?.contentWindow) {
         try {
@@ -87,9 +96,8 @@ const sendInitConfig = () => {
             
             // 发送初始化配置，注入当前登录用户的 User ID 和 Name
             const displayName = userInfo.real_name || userInfo.user_name;
-            chatFrame.value.contentWindow.postMessage({
+            chatFrame.value.contentWindow.postMessage(createEmbedMessage({
                 type: 'INIT_CONFIG',
-                token: apiKey,
                 user_info: {
                     user_id: userInfo.user_id,
                     user_name: userInfo.user_name,
@@ -112,7 +120,7 @@ const sendInitConfig = () => {
                     query: String(route.query.portal_question),
                     action: route.query.portal_action === 'fill' ? 'fill' : 'send'
                 } : null
-            }, '*');
+            }, embedHandshakeNonce), embedTargetOrigin);
             
             // 发送成功后，稍微延迟关闭 loading，以确保子页面有时间渲染
             setTimeout(() => {
@@ -134,7 +142,10 @@ const retryInit = () => {
 
 const sendSavedReportOpenRequest = (target: SavedReportOpenRequest) => {
     if (!widgetReady.value || !target?.report_id || !chatFrame.value?.contentWindow) return;
-    chatFrame.value.contentWindow.postMessage(createSavedReportOpenMessage(target), '*');
+    chatFrame.value.contentWindow.postMessage(
+        createEmbedMessage(createSavedReportOpenMessage(target), embedHandshakeNonce),
+        embedTargetOrigin,
+    );
 };
 
 const handleSavedReportOpenEvent = (event: Event) => {
@@ -150,6 +161,12 @@ const clearHostConversationPin = () => {
 };
 
 const handleMessage = (event: MessageEvent) => {
+    if (!isTrustedEmbedMessage(
+        event,
+        chatFrame.value?.contentWindow || null,
+        embedTargetOrigin,
+        embedHandshakeNonce,
+    )) return;
     const data = event.data;
     if (data.source === 'nanzi-agent-embed' && data.type === 'OPEN_DATA_PORTAL_FULL') {
         router.push({ path: '/dashboard/personal', query: { tab: 'data' } });

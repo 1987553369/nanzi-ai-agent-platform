@@ -60,23 +60,18 @@ CREATE DATABASE IF NOT EXISTS `nanzi_ai_agent_platform` CHARACTER SET utf8mb4 CO
 
 ### 第三步：配置默认管理员账号（可选）
 
-如果您是首次部署，需要配置默认的 `admin` 账号和预置 API Key 凭证。
-**提示**：在执行第二步结构初始化时，导入脚本在结束时会**自动交互询问并一键导入此数据**。如果您在当时选择了跳过，或者需要重新导入，也可以通过以下指令随时进行**手动单独导入**：
+如果您是首次部署，需要创建 `admin` 账号和随机 API Key。Python 导入脚本在结构初始化结束时会询问是否创建；也可以单独运行：
 
-* **使用 Python 工具导入**：
+* **创建管理员（已存在时幂等跳过）**：
   ```bash
-  ./db-prod/apply-sql.sh db-prod/INIT-USER-ADMIN.sql
+  ./db-prod/create-admin-user.sh
   ```
-* **使用纯 Shell 原生工具导入**：
+* **创建或轮换管理员 API Key**：
   ```bash
-  ./db-prod/apply-sql-native.sh db-prod/INIT-USER-ADMIN.sql
+  ./db-prod/create-admin-key.sh admin
   ```
-（同样需要输入对应的 MySQL 连接参数，并输入 `YES` 确认执行）
 
-**💡 默认管理员账号信息说明**：
-- **默认用户名**：`admin`
-- **默认 API Key**：`5BYfsKWhU_Cfx83cuo8E0kd4AtEhlUHDVlKwwR2kN-c`
-- **初始登录说明**：该脚本未设置初始密码。默认情况下，系统在第一次生成后**仅支持通过 API Key 进行登录和接口调用**。用户成功登录系统后，可前往用户管理或个人中心页面**自行修改并设置初始登录密码**。
+`db-prod/INIT-USER-ADMIN.sql` 中的历史固定凭据已禁用，不得恢复。随机 Key 明文只显示一次，请保存到密钥管理系统；登录后可在用户管理或个人中心设置密码。
 
 ---
 

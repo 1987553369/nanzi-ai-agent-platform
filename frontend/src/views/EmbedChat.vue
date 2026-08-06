@@ -2098,6 +2098,11 @@
 import { ref, reactive, onMounted, onUnmounted, nextTick, watch, computed, triggerRef } from "vue";
 import { useRouter } from "vue-router";
 import axios from "@/utils/axios";
+import {
+  createEmbedMessage,
+  isTrustedEmbedMessage,
+  resolveTrustedParentOrigin,
+} from "@/utils/embedProtocol";
 import { finalizeConversation } from "@/utils/conversationFinalize";
 import { cancelConversationRun } from "@/utils/cancelConversationRun";
 import { createConversationId } from "@/utils/conversationId";
@@ -4890,16 +4895,23 @@ const addCommand = async () => {
   }
 };
 // --- PostMessage Protocol ---
+const embedProtocolQuery = new URLSearchParams(window.location.search);
+const embedHandshakeNonce = embedProtocolQuery.get("handshake_nonce") || "";
+const trustedHostOrigin = resolveTrustedParentOrigin(
+  document.referrer,
+  embedProtocolQuery.get("parent_origin"),
+);
 const postMessageToHost = (payload: any) => {
+  if (window.parent === window || !trustedHostOrigin || !embedHandshakeNonce) return;
   if (config.instanceId) {
     payload.instance_id = config.instanceId;
   }
-  window.parent?.postMessage(
-    {
+  window.parent.postMessage(
+    createEmbedMessage({
       source: "nanzi-agent-embed",
       ...payload,
-    },
-    "*"
+    }, embedHandshakeNonce),
+    trustedHostOrigin,
   );
 };
 const savedReportFocusRequest = ref<{
@@ -4924,7 +4936,12 @@ const openSavedReportFromHost = (target: any) => {
   setTimeout(() => openPortalDrawer(), 0);
 };
 const handlePostMessage = (event: MessageEvent) => {
-  // Security check logic here in production
+  if (!trustedHostOrigin || !isTrustedEmbedMessage(
+    event,
+    window.parent,
+    trustedHostOrigin,
+    embedHandshakeNonce,
+  )) return;
   const data = event.data;
   if (
     data.instance_id &&
@@ -4939,10 +4956,11 @@ const handlePostMessage = (event: MessageEvent) => {
       const incomingToken = data.token || data.api_key || data.apikey;
       if (incomingToken) {
         config.token = incomingToken;
-        hasPermission.value = true; // Reset permission state to try again
         // Configure axios defaults immediately
         axios.defaults.headers.common["Authorization"] = `Bearer ${incomingToken}`;
         axios.defaults.headers.common["X-API-Key"] = incomingToken;
+      }
+        hasPermission.value = true; // Reset permission state to try again
         void loadWorkbenchHome();
         if (data.agent_id) {
           const agentId = String(data.agent_id);
@@ -4998,10 +5016,7 @@ const handlePostMessage = (event: MessageEvent) => {
           );
         }
         postMessageToHost({ type: "INIT_SUCCESS" });
-        initChat(); // Only init if token exists
-      } else {
-        console.warn("INIT_CONFIG received but no token/api_key found in payload!");
-      }
+        initChat();
       break;
     case "OPEN_SAVED_REPORT":
       openSavedReportFromHost(data.open_saved_report);
@@ -5172,7 +5187,7 @@ const fetchAccountInfo = async () => {
 // State
 const hasPermission = ref(true); // Default to true, strictly controlled by validateToken
 
-/** 仅在服务端校验通过后写入，避免 URL 里陈旧的 ?token= 覆盖刚登录写入的 api_key（父页 Chat.vue postMessage 会读 localStorage）。 */
+/** 仅在服务端校验通过后写入，避免 URL 里陈旧的 ?token= 覆盖当前会话凭据。 */
 const syncValidatedCredentials = (apiKey: string) => {
   config.token = apiKey;
   localStorage.setItem("yovole_token", apiKey);
@@ -6943,6 +6958,7 @@ onMounted(() => {
     config.hideMessageBorder = savedHideMessageBorder === "1";
   }
   const query = new URLSearchParams(window.location.search);
+  if (query.get("instance_id")) config.instanceId = query.get("instance_id")!;
   if (query.get("token")) {
     const token = query.get("token")!;
     // 仅设置内存中的 config.token 参与校验；校验通过后再 syncValidatedCredentials，避免脏 URL 覆盖 localStorage

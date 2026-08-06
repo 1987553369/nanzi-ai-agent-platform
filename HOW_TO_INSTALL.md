@@ -384,14 +384,10 @@ NanZi 开源智能体平台是企业级的多智能体编排与数据智能洞�
 *   **Swagger 接口文档**：`http://localhost:8001/docs`
 
 ### 🔑 首次登录指引
-1.  南孜系统后台默认采用 **仅 API Key 认证** 的安全规则。
-2.  **MySQL**：若您在初始化阶段执行过 `db-prod/INIT-USER-ADMIN.sql`，且 `.env` 中的 `ENCRYPTION_KEY` **仍为 `env.example` 默认值**，平台会预置以下默认管理员凭证：
-    *   **默认用户名**：`admin`
-    *   **默认管理员 API Key**：`5BYfsKWhU_Cfx83cuo8E0kd4AtEhlUHDVlKwwR2kN-c`
-    *   若您已修改 `ENCRYPTION_KEY`，请**不要**使用上述默认 Key，应重新创建管理员并使用新生成的 API Key。
-3.  **PostgreSQL**：没有固定预置 API Key。请使用 `db-prod-pg/apply-sql.sh` 初始化时自动生成的凭证，或执行 `create-admin-user.sh` / `create-admin-key.sh` 后使用终端输出的新 Key 登录。
-4.  在登录框中粘贴对应数据库初始化流程生成的 API Key 即可登录后台。
-5.  **安全提示**：首次登录成功后，请务必前往**【用户管理】**或【个人中心】，为 `admin` 用户设置登录密码，并妥善保存或轮换 API Key。
+1.  南孜系统后台默认采用 API Key 认证。
+2.  **MySQL**：执行 `./db-prod/create-admin-user.sh`；**PostgreSQL**：执行 `./db-prod-pg/create-admin-user.sh`。初始化脚本会按当前 `ENCRYPTION_KEY` 生成随机 API Key，明文只显示一次。
+3.  在登录框中粘贴本次生成的 API Key 即可登录后台。仓库不提供默认 API Key，`db-prod/INIT-USER-ADMIN.sql` 已禁用。
+4.  **安全提示**：首次登录成功后，请前往**【用户管理】**或【个人中心】设置管理员密码，并将 API Key 存入密钥管理系统；如有暴露风险，立即运行 `create-admin-key.sh` 轮换。
 
 ---
 

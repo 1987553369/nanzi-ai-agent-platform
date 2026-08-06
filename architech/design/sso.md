@@ -16,7 +16,7 @@
 
 ### 2.2 请求头 (Headers)
 必须包含一个固定的访问令牌：
-- `YOVOLE-LAPLACE-API-ACCESS-TOKEN`: `laplace` (或根据环境配置)
+- `YOVOLE-LAPLACE-API-ACCESS-TOKEN`: 仅允许通过部署环境注入（例如 `SSO_ACCESS_TOKEN`），仓库不提供默认值。
 
 ### 2.3 请求体 (Payload)
 ```json
@@ -39,7 +39,7 @@
 ```bash
 # SSO Configuration
 SSO_API_URL=https://yovole.net/api/v1/user/check/login
-SSO_ACCESS_TOKEN=laplace
+SSO_ACCESS_TOKEN=CHANGE_ME_SSO_ACCESS_TOKEN
 SSO_REQUEST_SYSTEM=NANZI_API_DATA_PLATFORM
 SSO_REQUEST_BUSINESS=USER-LOGIN
 SSO_TIMEOUT=30

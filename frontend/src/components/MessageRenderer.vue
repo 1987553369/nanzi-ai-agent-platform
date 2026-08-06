@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { normalizeGeneratedFileHref } from '@/utils/generatedFileUrl';
-import { renderMarkdown } from '@/utils/markdown';
+import { renderMarkdown, sanitizeMarkdownHtml } from '@/utils/markdown';
 import { enhanceMarkdownTablesForMobile } from '@/utils/markdownTableResponsive';
 import { parseQuickButtons, postProcessQuickButtonHtml } from '@/utils/quickButtons';
 import { applyChartViewMode, buildChartTableRows, getAvailableChartViewModes, getChartViewModeLabel, mergeChartDefaults, parseChartOptions, resolveActiveChartViewMode, type ChartViewMode } from '@/utils/chartRenderer';
@@ -101,15 +101,6 @@ interface ContentSegment {
   langName?: string;
   runnable?: boolean;
 }
-
-  /** 将 [ID:n] 转为可点击徽章（Markdown 渲染前保护，避免被解析器吞掉） */
-  const protectCitationsInMarkdown = (text: string) => {
-    if (!text) return '';
-    return text.replace(/(?:[\[【]ID:(\w+)[\]】])|(?:Fig\.\s*(\d+))/gi, (match, id, figNum) => {
-      const finalId = id || figNum;
-      return `<span class="citation-badge" data-cite-id="${finalId}">${match}</span>`;
-    });
-  };
 
   const isInsideCitationBadge = (html: string, offset: number) => {
     const before = html.slice(0, offset);
@@ -218,7 +209,7 @@ interface ContentSegment {
   };
 
   const renderMarkdownSegment = (text: string) => {
-    return postProcessHtml(renderMarkdown(protectCitationsInMarkdown(text)));
+    return sanitizeMarkdownHtml(postProcessHtml(renderMarkdown(text)));
   };
 
 const handleContentClick = (event: MouseEvent) => {

@@ -38,7 +38,7 @@ vim .env
 ```bash
 # 服务配置
 API_SERVICE_ENV=prod                    # 环境: dev/prod
-API_SERVICE_LOG_LEVEL=INFO              # 日志级别
+LOG_LEVEL=INFO                          # 日志级别
 
 # 平台主数据库类型：mysql（默认），也可设置为 postgresql
 DATABASE_TYPE=mysql
@@ -188,12 +188,11 @@ INFO:     Uvicorn running on http://0.0.0.0:8001 (Press CTRL+C to quit)
 
 **认证方式：仅使用 API Key**
 
-1. 首次使用需要创建管理员 API Key：
-   平台推荐通过运行 `db-prod/INIT-USER-ADMIN.sql` 来初始化默认管理员账号。您可以参考 [db-prod/README.md](file:///Users/chenxiaolong/资料/有孚网络/1南孜中台/yovole-nanzi-ai-agent-platform/db-prod/README.md) 的说明，在项目根目录下通过运行以下部署脚本来完成导入：
+1. 首次使用需要创建随机管理员 API Key。配置唯一的 `ENCRYPTION_KEY` 后，在项目根目录运行：
    ```bash
-   ./db-prod/apply-sql.sh db-prod/INIT-USER-ADMIN.sql
+   ./db-prod/create-admin-user.sh
    ```
-   *注：默认管理员用户名为 `admin`，默认 API Key 为 `5BYfsKWhU_Cfx83cuo8E0kd4AtEhlUHDVlKwwR2kN-c`。首次使用此 API Key 登录后，请立即进入【用户管理】为其设置密码以保证安全。*
+   API Key 明文只在当前终端显示一次；仓库不提供默认 Key。请立即保存到密钥管理系统，并在首次登录后设置管理员密码。
 
 2. 在管理后台登录页面输入上述 API Key 即可登录。
 3. 登录后可以：

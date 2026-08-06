@@ -111,47 +111,27 @@ if [ $# -eq 0 ]; then
     echo "---------------------------------------------------"
     echo "✅ 所有数据库结构初始化迁移 SQL 文件执行成功。"
     
-    # 交互询问是否导入管理员账号
-    read -r -p "是否需要顺带导入默认管理员账号和预置 API Key 凭证？ (推荐首次部署时导入) [Y/N]: " RUN_INIT_ADMIN
+    # 交互询问是否创建随机管理员凭据
+    read -r -p "是否需要创建默认管理员 admin 并生成一次性随机 API Key？ [Y/N]: " RUN_INIT_ADMIN
     RUN_INIT_ADMIN_UPPER=$(echo "$RUN_INIT_ADMIN" | tr '[:lower:]' '[:upper:]')
     if [ "$RUN_INIT_ADMIN_UPPER" == "Y" ] || [ "$RUN_INIT_ADMIN_UPPER" == "YES" ]; then
-        ADMIN_SQL="db-prod/INIT-USER-ADMIN.sql"
-        if [ -f "$ADMIN_SQL" ]; then
-            echo "---------------------------------------------------"
-            echo "🚀 正在导入默认管理员账号数据 ($ADMIN_SQL)..."
-            python3 db-prod/apply_sql.py "$ADMIN_SQL" "${COMMON_ARGS[@]}"
-            if [ $? -ne 0 ]; then
-                 echo "❌ 默认管理员账号数据导入失败。"
-                 exit 1
-            fi
-            echo "---------------------------------------------------"
-            echo "✅ 默认管理员账号数据导入成功！"
-            echo -e "\033[1;32m===================================================\033[0m"
-            echo -e "\033[1;32m🔑 首次登录重要指引：\033[0m"
-            echo -e "  - \033[1;36m默认用户名\033[0m  : admin"
-            echo -e "  - \033[1;36m预置 API Key\033[0m: 5BYfsKWhU_Cfx83cuo8E0kd4AtEhlUHDVlKwwR2kN-c"
-            echo -e "  - \033[1;33m登录方式\033[0m    : 在系统登录框中复制并粘贴上述 API Key 即可登录。"
-            echo -e "  - \033[1;31m安全提醒\033[0m    : 首次登录成功后，请务必前往【用户管理】"
-            echo -e "                或【个人中心】为 admin 设置密码，以启用常规密码登录。"
-            echo -e "\033[1;32m===================================================\033[0m"
-        else
-            echo "⚠️ 未找到默认管理员数据文件 $ADMIN_SQL，跳过导入。"
+        echo "---------------------------------------------------"
+        echo "🚀 正在生成默认管理员和一次性随机 API Key..."
+        if ! DATABASE_TYPE=mysql \
+            MYSQL_HOST="$MYSQL_HOST_INPUT" \
+            MYSQL_PORT="$MYSQL_PORT_INPUT" \
+            MYSQL_USER="$MYSQL_USER_INPUT" \
+            MYSQL_PASSWORD="$MYSQL_PASSWORD_INPUT" \
+            MYSQL_DB="$MYSQL_DATABASE_INPUT" \
+            python3 scripts/create_admin_user.py; then
+            echo "❌ 默认管理员账号创建失败。"
+            exit 1
         fi
+        echo "✅ 管理员初始化完成；请立即保存终端中仅显示一次的 API Key。"
     else
         echo "💡 已跳过默认管理员账号数据的导入。"
     fi
 else
     python3 db-prod/apply_sql.py "${SQL_FILES[@]}" "${COMMON_ARGS[@]}"
-    for f in "${SQL_FILES[@]}"; do
-        if [[ "$f" =~ INIT-USER-ADMIN.sql$ ]]; then
-            echo -e "\033[1;32m===================================================\033[0m"
-            echo -e "\033[1;32m🔑 首次登录重要指引：\033[0m"
-            echo -e "  - \033[1;36m默认用户名\033[0m  : admin"
-            echo -e "  - \033[1;36m预置 API Key\033[0m: 5BYfsKWhU_Cfx83cuo8E0kd4AtEhlUHDVlKwwR2kN-c"
-            echo -e "  - \033[1;33m登录方式\033[0m    : 在系统登录框中复制并粘贴上述 API Key 即可登录。"
-            echo -e "  - \033[1;31m安全提醒\033[0m    : 首次登录成功后，请务必前往【用户管理】"
-            echo -e "                或【个人中心】为 admin 设置密码，以启用常规密码登录。"
-            echo -e "\033[1;32m===================================================\033[0m"
-        fi
-    done
+    echo "💡 SQL 执行完成。管理员请使用 ./db-prod/create-admin-user.sh 单独创建。"
 fi
