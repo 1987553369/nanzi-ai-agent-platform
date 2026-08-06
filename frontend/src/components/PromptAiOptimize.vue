@@ -31,6 +31,9 @@ const optimizing = ref(false);
 const showOptimizeModal = ref(false);
 const optimizeSuggestions = ref<PromptOptimizeSuggestion[]>([]);
 const activeOptimizeTab = ref(0);
+const activeSuggestion = computed(
+  () => optimizeSuggestions.value[activeOptimizeTab.value] || null,
+);
 let optimizeAbort: AbortController | null = null;
 
 const canOptimize = computed(() => Boolean((props.content || '').trim()) && !optimizing.value && !props.disabled);
@@ -221,13 +224,13 @@ onUnmounted(() => {
 
           <div class="flex-1 flex flex-col min-h-0 bg-white">
             <div
-              v-if="optimizeSuggestions[activeOptimizeTab]"
+              v-if="activeSuggestion"
               class="flex-1 flex flex-col p-6 overflow-hidden"
             >
               <div class="mb-4 p-3 bg-indigo-50 border border-indigo-100 rounded-xl">
                 <div class="text-[10px] font-bold text-indigo-700 uppercase mb-1">推荐理由 (Reason)</div>
                 <p class="text-xs text-indigo-900 leading-relaxed">
-                  {{ optimizeSuggestions[activeOptimizeTab].reason || '暂无说明' }}
+                  {{ activeSuggestion.reason || '暂无说明' }}
                 </p>
               </div>
 
@@ -235,7 +238,7 @@ onUnmounted(() => {
                 <div class="absolute top-3 right-3 z-10">
                   <button
                     type="button"
-                    @click="copyToClipboard(optimizeSuggestions[activeOptimizeTab].content)"
+                    @click="copyToClipboard(activeSuggestion.content)"
                     class="p-1.5 bg-white shadow-sm border border-gray-200 rounded-lg text-gray-400 hover:text-indigo-600 transition-all"
                     title="复制此版本"
                   >
@@ -243,14 +246,14 @@ onUnmounted(() => {
                   </button>
                 </div>
                 <pre class="w-full h-full p-6 text-xs text-gray-700 font-mono overflow-y-auto whitespace-pre-wrap">{{
-                  optimizeSuggestions[activeOptimizeTab].content
+                  activeSuggestion.content
                 }}</pre>
               </div>
 
               <div class="mt-6 flex justify-end">
                 <button
                   type="button"
-                  @click="applySuggestion(optimizeSuggestions[activeOptimizeTab].content)"
+                  @click="applySuggestion(activeSuggestion.content)"
                   class="px-6 py-2.5 bg-indigo-600 text-white text-xs font-bold rounded-xl hover:bg-indigo-700 shadow-lg shadow-indigo-600/20 active:scale-95 transition-all flex items-center"
                 >
                   <CheckBadgeIcon class="w-4 h-4 mr-2" />

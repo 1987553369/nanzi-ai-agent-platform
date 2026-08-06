@@ -728,7 +728,7 @@ onMounted(() => {
                     <div class="space-y-3">
                       <div class="flex items-center flex-wrap gap-2">
                         <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                          Step {{ step.step_number ?? idx + 1 }}
+                          Step {{ step.step_number ?? (Number(idx) + 1) }}
                         </span>
                         <span
                           class="px-2 py-0.5 rounded text-[9px] font-bold border uppercase tracking-wider"

@@ -89,6 +89,9 @@ const showOptimizeModal = ref(false);
 const optimizing = ref(false);
 const optimizeSuggestions = ref<any[]>([]);
 const activeOptimizeTab = ref(0);
+const activeOptimizeSuggestion = computed(
+  () => optimizeSuggestions.value[activeOptimizeTab.value] || null,
+);
 const models = ref<AIModel[]>([]);
 const selectedModel = ref<string>("");
 const showSnippets = ref(false);
@@ -1489,7 +1492,7 @@ watch(
           <div class="flex-1 flex flex-col min-h-0 bg-white">
             <transition name="slide-fade" mode="out-in">
               <div
-                v-if="optimizeSuggestions[activeOptimizeTab]"
+                v-if="activeOptimizeSuggestion"
                 :key="activeOptimizeTab"
                 class="flex-1 flex flex-col p-6 overflow-hidden"
               >
@@ -1502,7 +1505,7 @@ watch(
                     推荐理由 (Reason)
                   </div>
                   <p class="text-xs text-indigo-900 leading-relaxed">
-                    {{ optimizeSuggestions[activeOptimizeTab].reason }}
+                    {{ activeOptimizeSuggestion.reason }}
                   </p>
                 </div>
 
@@ -1513,7 +1516,7 @@ watch(
                     <button
                       @click="
                         copyToClipboard(
-                          optimizeSuggestions[activeOptimizeTab].content
+                          activeOptimizeSuggestion.content
                         )
                       "
                       class="p-1.5 bg-white shadow-sm border border-gray-200 rounded-lg text-gray-400 hover:text-indigo-600 transition-all active:scale-90"
@@ -1524,7 +1527,7 @@ watch(
                   </div>
                   <pre
                     class="w-full h-full p-6 text-xs text-gray-700 font-mono overflow-y-auto whitespace-pre-wrap custom-scrollbar"
-                    >{{ optimizeSuggestions[activeOptimizeTab].content }}</pre
+                    >{{ activeOptimizeSuggestion.content }}</pre
                   >
                 </div>
 
@@ -1532,7 +1535,7 @@ watch(
                   <button
                     @click="
                       applySuggestion(
-                        optimizeSuggestions[activeOptimizeTab].content
+                        activeOptimizeSuggestion.content
                       )
                     "
                     class="px-6 py-2.5 bg-indigo-600 text-white text-xs font-bold rounded-xl hover:bg-indigo-700 shadow-lg shadow-indigo-600/20 active:scale-95 transition-all flex items-center"
