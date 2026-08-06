@@ -26,6 +26,7 @@ import MessageRenderer from "../components/MessageRenderer.vue";
 import axios from "@/utils/axios";
 import { createUuid } from "../utils/conversationId";
 import { copyToClipboard } from "../utils/clipboard";
+import { normalizeMarkdownTheme, type MarkdownTheme } from "../types/markdownTheme";
 
 const router = useRouter();
 const agents = ref<AIAgent[]>([]);
@@ -168,11 +169,11 @@ const showEngineHelp = ref(false);
 const showAdvancedSafety = ref(false);
 
 // AI 消息排版样式选择与效果预览变量
-const selectedMarkdownTheme = ref("default");
+const selectedMarkdownTheme = ref<MarkdownTheme>("default");
 const hideMessageBorder = ref(false);
 const showThemePreviewHelp = ref(false);
-const previewTheme = ref("default");
-const markdownThemeOptions = [
+const previewTheme = ref<MarkdownTheme>("default");
+const markdownThemeOptions: Array<{ value: MarkdownTheme; label: string; emoji: string }> = [
   { value: 'default', label: '现代', emoji: '✨' },
   { value: 'minimal', label: '极简', emoji: '🍃' },
   { value: 'academic', label: '学术', emoji: '📖' },
@@ -1225,7 +1226,7 @@ const openAgentModal = (agent?: AIAgent) => {
       engine_type: agent.engine_type || "LOCAL",
       engine_config: agent.engine_config ? { ...agent.engine_config } : {},
     };
-    selectedMarkdownTheme.value = agent.engine_config?.default_markdown_theme || "default";
+    selectedMarkdownTheme.value = normalizeMarkdownTheme(agent.engine_config?.default_markdown_theme);
     hideMessageBorder.value = agent.engine_config?.hide_message_border === true;
     if (isExternalEngine(agentForm.value.engine_type)) {
       agentForm.value.agent_type = "GENERAL";

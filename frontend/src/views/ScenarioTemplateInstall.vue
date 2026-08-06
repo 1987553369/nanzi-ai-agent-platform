@@ -20,12 +20,13 @@ import type {
 import { useToast } from '../composables/useToast'
 
 type StepId = 'info' | 'resources' | 'install' | 'done'
+type InstallStep = { id: StepId; title: string; hint: string }
 
 const route = useRoute()
 const router = useRouter()
 const { showToast } = useToast()
 
-const steps: Array<{ id: StepId; title: string; hint: string }> = [
+const steps: readonly [InstallStep, ...InstallStep[]] = [
   { id: 'info', title: '填写信息', hint: '确认实例名称、显示名称和负责人' },
   { id: 'resources', title: '绑定资源', hint: '确认要补齐的数据集、知识库、工具和通知渠道' },
   { id: 'install', title: '预检安装', hint: '先预检，再一键安装发布' },
@@ -49,7 +50,7 @@ const form = ref({
   owner: '',
 })
 
-const currentStep = computed(() => steps[currentStepIndex.value])
+const currentStep = computed(() => steps[currentStepIndex.value] ?? steps[0])
 const canInstall = computed(() => Boolean(form.value.instance_name.trim() && form.value.display_name.trim()))
 const requiredMissing = computed(() => {
   if (!template.value) return []
@@ -72,7 +73,7 @@ const stepFromQuery = () => {
 }
 
 const syncStepToRoute = () => {
-  const step = steps[currentStepIndex.value]
+  const step = steps[currentStepIndex.value] ?? steps[0]
   if (route.query.step === step.id) return
   router.replace({
     name: 'ScenarioTemplateInstall',
@@ -141,7 +142,7 @@ const goStep = (index: number) => {
       showToast(`请先绑定必选资源：${requiredMissing.value.map((item) => item.name).join('、')}`, 'warning')
       return
     }
-    if (steps[targetIndex].id === 'done' && !installResult.value) {
+    if (steps[targetIndex]?.id === 'done' && !installResult.value) {
       showToast('请先完成预检安装', 'warning')
       return
     }

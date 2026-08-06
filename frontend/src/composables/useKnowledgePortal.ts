@@ -18,6 +18,7 @@ export interface RecommendationQuestion {
 
 export interface RecommendationPayload {
   questions: RecommendationQuestion[];
+  custom_questions: RecommendationQuestion[];
   loading?: boolean;
 }
 
@@ -151,16 +152,18 @@ export function useKnowledgePortal(options: UseKnowledgePortalOptions) {
       (currentRec?.custom_questions || []).length > 0
     )) return;
 
-    if (!datasetRecommendations.value[datasetId]) {
-      datasetRecommendations.value[datasetId] = { questions: [], custom_questions: [], loading: true };
+    let recommendation = datasetRecommendations.value[datasetId];
+    if (!recommendation) {
+      recommendation = { questions: [], custom_questions: [], loading: true };
+      datasetRecommendations.value[datasetId] = recommendation;
     } else {
-      datasetRecommendations.value[datasetId].loading = true;
+      recommendation.loading = true;
     }
 
     try {
       const params: Record<string, any> = {};
-      if (refresh && (datasetRecommendations.value[datasetId]?.questions || []).length > 0) {
-        const queries = datasetRecommendations.value[datasetId].questions.map((q: any) => q.query);
+      if (refresh && recommendation.questions.length > 0) {
+        const queries = recommendation.questions.map((q) => q.query);
         params.exclude = queries.join(",");
       }
 
@@ -172,11 +175,11 @@ export function useKnowledgePortal(options: UseKnowledgePortalOptions) {
           loading: false
         };
       } else {
-        datasetRecommendations.value[datasetId].loading = false;
+        recommendation.loading = false;
       }
     } catch (error) {
       console.error("Failed to fetch recommendations for " + datasetId, error);
-      datasetRecommendations.value[datasetId].loading = false;
+      recommendation.loading = false;
     }
   };
 

@@ -405,7 +405,7 @@
                     <p class="text-[11px] font-bold text-gray-500">推送内容</p>
                     <article v-for="delivery in selectedSavedReportRunDetail.deliveries" :key="delivery.id" class="rounded-xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-950 p-3">
                       <div class="mb-2 flex flex-wrap items-center gap-1.5 text-[10px] font-bold">
-                        <span class="rounded-md bg-blue-50 px-2 py-1 text-blue-600 dark:bg-blue-950/30 dark:text-blue-300">{{ { inbox: '站内', dingtalk: '钉钉', wechat_work: '企业微信', email: '邮件' }[delivery.channel] || delivery.channel }}</span>
+                        <span class="rounded-md bg-blue-50 px-2 py-1 text-blue-600 dark:bg-blue-950/30 dark:text-blue-300">{{ formatDeliveryChannel(delivery.channel) }}</span>
                         <span class="rounded-md px-2 py-1" :class="delivery.status === 'success' ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30' : 'bg-red-50 text-red-600 dark:bg-red-950/30'">{{ delivery.status === 'success' ? '发送成功' : '发送失败' }}</span>
                         <span class="rounded-md bg-violet-50 px-2 py-1 text-violet-600 dark:bg-violet-950/30 dark:text-violet-300">{{ delivery.ai_status === 'success' ? 'AI 分析' : delivery.ai_status === 'fallback' ? '数据摘要' : '未启用 AI' }}</span>
                       </div>
@@ -2171,6 +2171,18 @@ const formatSavedReportRunDuration = (durationMs: number | null | undefined) => 
   if (durationMs === null || durationMs === undefined) return "耗时 -";
   if (durationMs < 1000) return `耗时 ${durationMs}ms`;
   return `耗时 ${(durationMs / 1000).toFixed(1)}s`;
+};
+
+const DELIVERY_CHANNEL_LABELS: Record<string, string> = {
+  inbox: "站内",
+  dingtalk: "钉钉",
+  wechat_work: "企业微信",
+  email: "邮件",
+};
+
+const formatDeliveryChannel = (channel: unknown): string => {
+  const key = String(channel || "");
+  return DELIVERY_CHANNEL_LABELS[key] || key;
 };
 
 const closeSavedReportDetail = () => {

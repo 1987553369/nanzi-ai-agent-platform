@@ -38,6 +38,7 @@ type ModelOption = {
   id?: string;
   name?: string;
   model_id: string;
+  type?: string;
 };
 
 const props = defineProps<{
@@ -143,8 +144,8 @@ const showNewConversationMenu = ref(false);
 const newConversationMenuRef = ref<HTMLElement | HTMLElement[] | null>(null);
 const newConversationMenuPanelRef = ref<HTMLElement | null>(null);
 const newConversationMenuPosition = reactive({ top: 0, left: 12 });
-const setNewConversationMenuRef = (el: Element | null) => {
-  newConversationMenuRef.value = (el as HTMLElement | null) ?? null;
+const setNewConversationMenuRef = (el: unknown) => {
+  newConversationMenuRef.value = el instanceof HTMLElement ? el : null;
 };
 const getNewConversationTriggerEl = (): HTMLElement | null => {
   const root = newConversationMenuRef.value;
@@ -495,7 +496,6 @@ const approvalMenuPosition = reactive({
 
 const isMobileViewport = computed(() => props.windowWidth < 640);
 
-const shortcutRowRef = ref<HTMLElement | null>(null);
 const shortcutScrollRef = ref<HTMLElement | null>(null);
 const desktopCommandDrawerRef = ref<HTMLElement | null>(null);
 
@@ -1009,7 +1009,7 @@ defineExpose({
 
             <!-- 2. Middle Content -->
             <div class="flex-1 min-w-0 relative">
-                <div ref="shortcutRowRef" class="flex flex-1 min-w-0 items-center gap-2">
+                <div class="flex flex-1 min-w-0 items-center gap-2">
                             <div class="relative flex-1 min-w-0 overflow-hidden">
                                 <div
                                   ref="shortcutScrollRef"

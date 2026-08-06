@@ -7,6 +7,7 @@ import { parseQuickButtons, postProcessQuickButtonHtml } from '@/utils/quickButt
 import { applyChartViewMode, buildChartTableRows, getAvailableChartViewModes, getChartViewModeLabel, mergeChartDefaults, parseChartOptions, resolveActiveChartViewMode, type ChartViewMode } from '@/utils/chartRenderer';
 import { dedupeSqlPlanPayload, parseSqlPlan, type SqlPlanData } from '@/utils/sqlPlan';
 import { copyToClipboard } from '@/utils/clipboard';
+import type { MarkdownTheme } from '@/types/markdownTheme';
 import MermaidRenderer from './MermaidRenderer.vue';
 import SqlPlanCard from './SqlPlanCard.vue';
 
@@ -52,7 +53,7 @@ use([
 
 const props = withDefaults(defineProps<{
   content: string;
-  theme?: 'default' | 'minimal' | 'academic' | 'apple' | 'warm' | 'compact';
+  theme?: MarkdownTheme;
 }>(), {
   theme: 'default'
 });

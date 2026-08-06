@@ -6,6 +6,7 @@ import MarkdownEditor from '../MarkdownEditor.vue';
 import Modal from '../Modal.vue';
 import MessageRenderer from '../MessageRenderer.vue';
 import { mcpToolDisplayName } from '../../utils/mcpToolDisplayName';
+import { normalizeMarkdownTheme, type MarkdownTheme } from '../../types/markdownTheme';
 
 type VersionConfigStep = 'agent' | 'model' | 'tools' | 'prompt' | 'welcome' | 'review';
 type ToolGroup = { label: string; icon: string; tools: any[] };
@@ -188,8 +189,8 @@ const setWelcomeMode = (mode: 'manual' | 'ai') => {
 
 // AI 消息排版样式选择与效果预览变量
 const showThemePreviewHelp = ref(false);
-const previewTheme = ref("default");
-const markdownThemeOptions = [
+const previewTheme = ref<MarkdownTheme>("default");
+const markdownThemeOptions: Array<{ value: MarkdownTheme; label: string; emoji: string }> = [
   { value: 'default', label: '现代', emoji: '✨' },
   { value: 'minimal', label: '极简', emoji: '🍃' },
   { value: 'academic', label: '学术', emoji: '📖' },
@@ -546,7 +547,7 @@ const externalCreationMissingFields = computed(() => {
                   class="flex h-5 w-5 items-center justify-center rounded-full border border-blue-200 bg-blue-50 text-xs font-bold text-blue-600 hover:bg-blue-100"
                   aria-label="查看排版样式效果预览说明"
                   title="查看排版样式效果预览说明"
-                  @click="previewTheme = agentForm.engine_config?.default_markdown_theme || 'default'; showThemePreviewHelp = true"
+                  @click="previewTheme = normalizeMarkdownTheme(agentForm.engine_config?.default_markdown_theme); showThemePreviewHelp = true"
                 >?</button>
               </div>
               <p class="mt-1 text-xs text-gray-500">指定该智能体默认推荐给用户的 Markdown 排版呈现样式，历史数据未指定则默认为现代样式。</p>
