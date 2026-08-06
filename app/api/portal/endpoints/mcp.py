@@ -24,6 +24,8 @@ from app.utils.outbound_url_policy import (
     validate_outbound_http_url,
     validate_outbound_url,
 )
+from app.core.config import settings
+from app.core.rate_limit import enforce_rate_limit
 from pydantic import BaseModel, Field, ConfigDict
 
 logger = logging.getLogger(__name__)
@@ -644,6 +646,12 @@ async def execute_mcp_tool(
     db: AsyncSession = Depends(get_db_session),
     user: Dict = Depends(require_api_key)
 ):
+    await enforce_rate_limit(
+        bucket="mcp-tool-execution",
+        identifier=str(user.get("user_id") or user.get("id") or "unknown"),
+        limit=settings.TOOL_EXECUTION_RATE_LIMIT,
+        window_seconds=settings.RATE_LIMIT_WINDOW_SECONDS,
+    )
     stmt = select(McpToolCache).where(McpToolCache.id == tool_id)
     tool = (await db.execute(stmt)).scalar_one_or_none()
     if not tool: raise HTTPException(status_code=404, detail="Tool not found")

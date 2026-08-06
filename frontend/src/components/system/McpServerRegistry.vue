@@ -418,6 +418,11 @@ const applyMcpJsonPaste = (options?: { connect?: boolean }) => {
     return false
   }
   const entry = result.entries[0]
+  if (!entry) {
+    mcpJsonPasteHint.value = '配置中没有可用的 MCP 服务条目'
+    showToast(mcpJsonPasteHint.value, 'warning')
+    return false
+  }
   newServer.value.sse_url = entry.url
 
   const headerEntries = Object.entries(entry.headers || {})

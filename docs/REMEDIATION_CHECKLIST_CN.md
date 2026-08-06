@@ -24,8 +24,8 @@
 | [x] | AUTH-P1-01 | 浏览器改用 HttpOnly/Secure/SameSite 短期 Session，停止 localStorage 长期 API Key | 登录不返回长期 Key；随机 Session 可解析、撤销和过期；生产 Cookie 强制 Secure |
 | [x] | AUTH-P1-02 | SSO 强制 TLS 校验，删除 `verify=False` | 不可信证书连接失败 |
 | [x] | AUTH-P1-05 | CORS 默认同源，生产环境禁止通配 Origin 与凭据组合 | 未显式配置的跨域请求不返回 CORS 授权头 |
-| [~] | AUTH-P1-03 | 登录、LLM、工具、代码执行统一限流 | 登录、SSO、聊天生成、代码执行已接入 Redis 原子限流；独立工具执行入口待统一接入 |
-| [ ] | AUTH-P1-04 | Trace、Agent Active Config、上传文件统一对象授权 | 跨用户负向测试通过 |
+| [x] | AUTH-P1-03 | 登录、LLM、工具、代码执行统一限流 | 登录、SSO、聊天生成、MCP 工具执行和代码执行均接入 Redis 原子限流 |
+| [~] | AUTH-P1-04 | Trace、Agent Active Config、上传文件统一对象授权 | Portal Trace/Span 和 Agent 活跃配置已校验所有者/执行权限；上传路径已按用户隔离，仍需浏览器跨用户负向集成测试 |
 | [ ] | AI-P1-01 | Prompt Override、Raw Prompt、工具自动批准改为服务端特权 Capability | 普通请求无法弱化运行策略 |
 | [ ] | ENG-P1-01 | 固定 Python/Node 依赖，拆分 Runtime/Dev/Optional Lock | 干净环境可重复构建，生成 SBOM |
 | [ ] | ENG-P1-02 | 建立 CI：Lint、类型、单测、集成、前端构建、SAST、Secret/依赖/镜像扫描 | PR 必须通过全部门禁 |
@@ -85,4 +85,5 @@
 | 2026-08-06 | P1-A | SSO 强制证书校验；CORS 改为显式 Origin 白名单，生产禁止通配符 |
 | 2026-08-06 | P1-B | 增加 Redis Lua 原子限流，覆盖登录、SSO、聊天生成和代码执行，并保留 `Retry-After` |
 | 2026-08-06 | P1-C | 浏览器登录改用 Redis 短期随机 Session，移除响应和 localStorage 中的长期 API Key |
-| 2026-08-06 | 验证 | 后端安全/运行时契约 62 项通过；浏览器 Session/Markdown/Embed 契约 11 项通过；全量前端构建仍被仓库既有 TypeScript 错误阻断 |
+| 2026-08-06 | P1-D | Portal Trace/Span 与 Agent 活跃配置增加对象授权；MCP 工具执行补分布式限流 |
+| 2026-08-06 | 验证 | 后端安全/运行时契约 65 项通过；浏览器 Session/Markdown/Embed/MCP 契约 13 项通过；全量前端构建仍被仓库既有 TypeScript 错误阻断 |

@@ -207,7 +207,21 @@ async def get_active_config(
     user: Dict[str, Any] = Depends(get_current_user)
 ):
     """获取智能体当前的活跃版本配置 (用于调试预览)"""
-    config = await AgentManagerService.get_active_agent_config(session, agent_id=agent_id)
+    from sqlalchemy import or_, select
+    from app.models.agent import AIAgent
+
+    agent = (
+        await session.execute(
+            select(AIAgent)
+            .where(or_(AIAgent.id == agent_id, AIAgent.name == agent_id))
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    if not await AgentManagerService._user_can_execute_agent(session, agent, user):
+        raise HTTPException(status_code=403, detail="无权查看该智能体的活跃配置")
+    config = await AgentManagerService.get_active_agent_config(session, agent_id=agent.id)
     if not config:
         raise HTTPException(status_code=404, detail="Active configuration not found for this agent")
     return config
@@ -220,7 +234,21 @@ async def get_runtime_welcome_cards(
     user: Dict[str, Any] = Depends(get_current_user),
 ):
     """获取欢迎页卡片：人工模式读固定配置，自动模式读 5 分钟推荐缓存。"""
-    config = await AgentManagerService.get_active_agent_config(session, agent_id=agent_id)
+    from sqlalchemy import or_, select
+    from app.models.agent import AIAgent
+
+    agent = (
+        await session.execute(
+            select(AIAgent)
+            .where(or_(AIAgent.id == agent_id, AIAgent.name == agent_id))
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    if not await AgentManagerService._user_can_execute_agent(session, agent, user):
+        raise HTTPException(status_code=403, detail="无权查看该智能体的欢迎配置")
+    config = await AgentManagerService.get_active_agent_config(session, agent_id=agent.id)
     if not config:
         raise HTTPException(status_code=404, detail="Active configuration not found for this agent")
     from app.services.ai.welcome_card_service import get_runtime_welcome_cards as load_cards

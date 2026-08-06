@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     LOGIN_RATE_LIMIT: int = 10
     CHAT_RATE_LIMIT: int = 60
     CODE_EXECUTION_RATE_LIMIT: int = 10
+    TOOL_EXECUTION_RATE_LIMIT: int = 30
     BROWSER_SESSION_TTL_SECONDS: int = 3600
 
     # Main database type: mysql (default) / postgresql

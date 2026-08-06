@@ -5,7 +5,7 @@ from sqlalchemy import select, func, desc, or_, case
 from typing import Optional, List, Dict, Any
 from app.core.dependencies import require_api_key, require_admin
 from app.core.orm import get_db_session
-from app.models.audit import AccessLog, AgentExecutionTrace
+from app.models.audit import AccessLog, AgentExecutionHistory, AgentExecutionTrace
 from app.services.audit_service import AuditService
 from datetime import datetime, timedelta
 import json
@@ -30,6 +30,34 @@ def is_admin(user: dict) -> bool:
          try: perms = json.loads(perms)
          except Exception: return False
     return perms.get("role") == "admin"
+
+
+async def _require_trace_access(
+    trace_id: str,
+    user: dict,
+    db: AsyncSession,
+) -> AgentExecutionHistory:
+    history = (
+        await db.execute(
+            select(AgentExecutionHistory).where(
+                AgentExecutionHistory.trace_id == trace_id
+            )
+        )
+    ).scalar_one_or_none()
+    if history is None:
+        raise HTTPException(status_code=404, detail="Trace not found")
+    if is_admin(user):
+        return history
+
+    current_user_id = str(user.get("user_id") or user.get("id") or "").strip()
+    current_username = str(user.get("user_name") or user.get("username") or "").strip()
+    owner_user_id = str(history.user_id or "").strip()
+    owner_username = str(history.username or "").strip()
+    if (owner_user_id and owner_user_id == current_user_id) or (
+        owner_username and owner_username == current_username
+    ):
+        return history
+    raise HTTPException(status_code=403, detail="无权查看其他用户的执行链路")
 
 @router.get("/features")
 async def get_audit_features(
@@ -193,6 +221,7 @@ async def get_log_detail(
 
 @router.get("/traces/{trace_id}")
 async def get_execution_trace(trace_id: str, user: dict = Depends(require_api_key), db: AsyncSession = Depends(get_db_session)):
+    await _require_trace_access(trace_id, user, db)
     stmt = select(AgentExecutionTrace).where(AgentExecutionTrace.trace_id == trace_id).order_by(AgentExecutionTrace.step_number)
     rows = (await db.execute(stmt)).scalars().all()
     if not rows: raise HTTPException(status_code=404, detail="Trace not found")
@@ -210,6 +239,7 @@ async def get_execution_trace_spans(
     user: dict = Depends(require_api_key),
     db: AsyncSession = Depends(get_db_session)
 ):
+    await _require_trace_access(trace_id, user, db)
     stmt = select(AgentExecutionTrace).where(AgentExecutionTrace.trace_id == trace_id).order_by(AgentExecutionTrace.step_number)
     rows = (await db.execute(stmt)).scalars().all()
     if not rows:
