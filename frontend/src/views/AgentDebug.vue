@@ -594,6 +594,15 @@ const getAgentDisplayName = (msg: Message) => {
 };
 
 const currentUser = ref<any>(null);
+const canDebugPrompt = computed(() => {
+  if (String(currentUser.value?.role || "").toLowerCase() === "admin") return true;
+  const permissions = currentUser.value?.permissions;
+  if (Array.isArray(permissions)) {
+    return permissions.includes("element:chat:debug_prompt");
+  }
+  const elements = permissions?.elements;
+  return Array.isArray(elements) && elements.includes("element:chat:debug_prompt");
+});
 
 const fetchCurrentUser = async () => {
   try {
@@ -1257,10 +1266,22 @@ const debugConfig = reactive({
   injectedContext: [] as { key: string; value: string }[], // Manual Context Injection
 });
 
+watch([currentUser, canDebugPrompt], ([user, allowed]) => {
+  if (!user || allowed) return;
+  debugConfig.returnRawPrompt = false;
+  debugConfig.systemPromptOverride = "";
+  selectedRawPrompt.value = null;
+  showRawPromptModal.value = false;
+  messages.value.forEach((message) => {
+    delete message.rawPrompt;
+  });
+});
+
 
 
 const loadingConfig = ref(false);
 const loadCurrentPrompt = async () => {
+  if (!canDebugPrompt.value) return;
   if (!agentParams.agent_id) {
     alert("请先选择一个特定的智能体");
     return;
@@ -2887,7 +2908,6 @@ const sendMessage = async () => {
   try {
     // Prepare Debug Options
     const debugOptions: any = {
-      return_raw_prompt: debugConfig.returnRawPrompt,
       dry_run: debugConfig.dryRun,
       grounding_enabled: debugConfig.enableGrounding,
       hallucination_check: hallucinationCheckEnabled.value || undefined,
@@ -2895,12 +2915,15 @@ const sendMessage = async () => {
       knowledge_ragflow_vector_weight: knowledgeVectorWeight.value,
       knowledge_ragflow_metadata_top_k: knowledgeMetadataTopK.value,
     };
+    if (canDebugPrompt.value && debugConfig.returnRawPrompt) {
+      debugOptions.return_raw_prompt = true;
+    }
     if (debugConfig.model) debugOptions.model = debugConfig.model;
     if (debugConfig.temperature > 0)
       debugOptions.temperature = debugConfig.temperature;
 
     // Add Prompt Override
-    if (debugConfig.systemPromptOverride.trim()) {
+    if (canDebugPrompt.value && debugConfig.systemPromptOverride.trim()) {
       debugOptions.system_prompt_override = debugConfig.systemPromptOverride;
     }
 
@@ -4208,7 +4231,7 @@ onUnmounted(() => {
 
                 <!-- Prompt -->
                 <button
-                  v-if="msg.rawPrompt"
+                  v-if="msg.rawPrompt && canDebugPrompt"
                   @click="openRawPrompt(msg)"
                   class="flex items-center space-x-1 px-2 py-1 text-xs font-medium text-purple-600 bg-purple-50 hover:bg-purple-100 border border-purple-100 rounded-md transition-colors"
                   title="View Raw Prompt"
@@ -4889,6 +4912,7 @@ onUnmounted(() => {
       :loading-config="loadingConfig"
       :agent-context="agentContext"
       :rag-retrieval-meta="ragRetrievalMeta"
+      :can-debug-prompt="canDebugPrompt"
       @update:visible="(val) => { showConfigPanel = val; }"
       @load-config="loadCurrentPrompt"
       @clear-context="clearContext"
@@ -4896,7 +4920,7 @@ onUnmounted(() => {
 
     <!-- Modal: Raw Prompt -->
     <div
-      v-if="showRawPromptModal && selectedRawPrompt"
+      v-if="canDebugPrompt && showRawPromptModal && selectedRawPrompt"
       class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
     >
       <div

@@ -36,7 +36,7 @@ def _empty_scope():
 @pytest.mark.asyncio
 async def test_sanitize_drops_unauthorized_scope_items():
     db = AsyncMock()
-    owner = {"user_id": 7, "user_name": "alice", "role": "user"}
+    owner = {"user_id": 7, "user_name": "alice", "role": "admin"}
     raw_config = {
         "approval_mode": "allow",
         "resource_scope": {
@@ -59,6 +59,26 @@ async def test_sanitize_drops_unauthorized_scope_items():
     assert sanitized["approval_mode"] == "allow"
     # 不得就地修改调用方传入的 config
     assert raw_config["resource_scope"]["knowledge_bases"] == [{"id": "kb-forbidden"}]
+
+
+@pytest.mark.asyncio
+async def test_sanitize_rejects_auto_approval_without_owner_capability():
+    db = AsyncMock()
+    owner = {"user_id": 7, "user_name": "alice", "role": "user"}
+
+    with patch(
+        "app.services.ai_execution_capability_service._has_capability",
+        AsyncMock(return_value=False),
+    ):
+        with pytest.raises(tasks_endpoint.HTTPException) as exc_info:
+            await tasks_endpoint._sanitize_task_config(
+                db,
+                owner,
+                {"approval_mode": "allow"},
+            )
+
+    assert exc_info.value.status_code == 403
+    assert "element:chat:auto_approve_tools" in exc_info.value.detail
 
 
 @pytest.mark.asyncio

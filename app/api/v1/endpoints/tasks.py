@@ -21,6 +21,10 @@ from app.services.resource_scope_normalizer import (
     has_any_resource,
     normalize_resource_scope_for_user,
 )
+from app.services.ai_execution_capability_service import (
+    AIExecutionCapabilityDenied,
+    resolve_ai_execution_controls,
+)
 
 router = APIRouter()
 
@@ -43,10 +47,25 @@ async def _sanitize_task_config(
     owner_info: Dict[str, Any],
     config: Any,
 ) -> Any:
-    """收敛 config.resource_scope，丢弃所有者无权访问的数据集 / 知识库 / 技能 / MCP。"""
-    if not isinstance(config, dict) or "resource_scope" not in config:
+    """按任务所有者收敛自动批准能力与资源范围。"""
+    if not isinstance(config, dict):
         return config
     sanitized = dict(config)
+    try:
+        _, effective_permission_options = await resolve_ai_execution_controls(
+            db,
+            owner_info,
+            permission_options={"approval_mode": sanitized.get("approval_mode")},
+        )
+    except AIExecutionCapabilityDenied as exc:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Capability required: {exc.capability}",
+        ) from exc
+    sanitized["approval_mode"] = effective_permission_options["approval_mode"]
+
+    if "resource_scope" not in sanitized:
+        return sanitized
     normalized = await normalize_resource_scope_for_user(
         db, owner_info, sanitized.get("resource_scope") or {}
     )

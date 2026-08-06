@@ -19,8 +19,8 @@ from app.services.ai.scheduler_service import (
 
 
 @pytest.mark.no_infrastructure
-def test_task_permission_options_auto_allow_runtime_tools():
-    assert _task_permission_options() == {"approval_mode": "allow"}
+def test_task_permission_options_defaults_to_explicit_approval():
+    assert _task_permission_options() == {"approval_mode": "ask"}
     assert _task_permission_options({"approval_mode": "ask"}) == {"approval_mode": "ask"}
     assert _task_permission_options({"approval_mode": "deny"}) == {"approval_mode": "deny"}
 

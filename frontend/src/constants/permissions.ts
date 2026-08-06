@@ -11,7 +11,10 @@ export const MENU_TREE = [
     {
         id: 'menu:ai_chat',
         label: '智能助手 (AI Chat)',
-        children: []
+        children: [
+            { id: 'element:chat:debug_prompt', label: '调试提示词与查看 Raw Prompt' },
+            { id: 'element:chat:auto_approve_tools', label: '工具自动批准' }
+        ]
     },
     {
         id: 'menu:data_sources',

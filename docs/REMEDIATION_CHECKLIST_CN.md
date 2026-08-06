@@ -26,7 +26,7 @@
 | [x] | AUTH-P1-05 | CORS 默认同源，生产环境禁止通配 Origin 与凭据组合 | 未显式配置的跨域请求不返回 CORS 授权头 |
 | [x] | AUTH-P1-03 | 登录、LLM、工具、代码执行统一限流 | 登录、SSO、聊天生成、MCP 工具执行和代码执行均接入 Redis 原子限流 |
 | [~] | AUTH-P1-04 | Trace、Agent Active Config、上传文件统一对象授权 | Portal Trace/Span 和 Agent 活跃配置已校验所有者/执行权限；上传路径已按用户隔离，仍需浏览器跨用户负向集成测试 |
-| [ ] | AI-P1-01 | Prompt Override、Raw Prompt、工具自动批准改为服务端特权 Capability | 普通请求无法弱化运行策略 |
+| [x] | AI-P1-01 | Prompt Override、Raw Prompt、工具自动批准改为服务端特权 Capability | 普通请求无法弱化运行策略 |
 | [ ] | ENG-P1-01 | 固定 Python/Node 依赖，拆分 Runtime/Dev/Optional Lock | 干净环境可重复构建，生成 SBOM |
 | [~] | ENG-P1-02 | 建立 CI：Lint、类型、单测、集成、前端构建、SAST、Secret/依赖/镜像扫描 | 前端类型检查、生产构建和 317 项契约测试已通过；CI 编排与安全扫描仍待接入 |
 | [ ] | ENG-P1-03 | 统一前端 Auth Store、API Client、SSE Transport、错误模型 | Portal/Embed/Debug 共用协议契约 |
@@ -90,7 +90,9 @@
 | 2026-08-06 | ENG-B | 修复报表 Cron、元数据首表、数据门户导航、聊天日志步骤号和 Prompt 优化建议的严格空值类型错误；相关 6 个文件已退出全量构建错误列表 |
 | 2026-08-06 | ENG-C | 补齐知识推荐与模型能力类型，统一 9 种 Markdown 主题契约，收紧场景安装步骤和技能导入文件边界；本批减少 44 个前端构建错误 |
 | 2026-08-06 | ENG-D | 收紧 AgentDebug、数据源、知识库和 Embed 资源范围类型，修正过时契约断言；清零全量前端 TypeScript 错误 |
+| 2026-08-06 | P1-E | 注册 `element:chat:debug_prompt`、`element:chat:auto_approve_tools` 两项高风险能力；聊天请求缺少能力返回 403；任务创建/修改按所有者校验，历史任务运行时将未授权自动批准降级为请求批准；前端同步隐藏未授权控件 |
 | 2026-08-06 | 验证 | 后端安全/运行时契约 65 项通过；浏览器 Session/Markdown/Embed/MCP 契约 13 项通过；全量前端构建仍被仓库既有 TypeScript 错误阻断 |
 | 2026-08-06 | ENG-B 验证 | 相关前端静态契约 25 项通过；1 项未修改的 `PersonalCenter.vue` 旧样式字符串断言失败；全量构建继续暴露其余既有严格类型错误 |
 | 2026-08-06 | ENG-C 验证 | 相关前端静态契约 127 项通过；1 项未修改的调度器旧源码字符串断言失败；全量构建剩余错误集中在 AgentDebug、DataSourceManagement、EmbedChat、ExampleManagement 和 KnowledgeBaseManagement |
 | 2026-08-06 | ENG-D 验证 | `npm run build` 完整通过（10,386 个模块）；`tests/frontend` 全量 317 项通过；仍有大 Chunk 与静态/动态重复导入构建警告待 ENG-P1-04 处理 |
+| 2026-08-06 | P1-E 验证 | AI 执行能力纯逻辑与迁移契约 16 项通过；`tests/frontend` 全量 320 项通过；`npm run build` 完整通过（10,386 个模块）。聊天 API/任务端点负向测试已补齐，本机因 Python 3.9 且缺少 `aiomysql` 未执行，需由标准 Python 3.11 CI 回归 |

@@ -9,14 +9,14 @@ from app.services.task_execution_options import (
 )
 
 
-def test_normalize_approval_mode_defaults_to_allow():
-    assert normalize_approval_mode(None) == "allow"
+def test_normalize_approval_mode_defaults_to_ask():
+    assert normalize_approval_mode(None) == "ask"
     assert normalize_approval_mode("ASK") == "ask"
-    assert normalize_approval_mode("bogus") == "allow"
+    assert normalize_approval_mode("bogus") == "ask"
 
 
 def test_permission_options_from_task_config():
-    assert permission_options_from_task_config({}) == {"approval_mode": "allow"}
+    assert permission_options_from_task_config({}) == {"approval_mode": "ask"}
     assert permission_options_from_task_config({"approval_mode": "ask"}) == {"approval_mode": "ask"}
 
 

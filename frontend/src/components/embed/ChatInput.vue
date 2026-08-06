@@ -11,6 +11,7 @@ import { isImageAttachment } from "@/utils/attachmentImages";
 import { DATASET_PORTAL_SYSTEM_COMMAND_ID } from "@/constants/datasetPortalCommand";
 
 type ApprovalMode = "ask" | "allow" | "deny";
+const AUTO_APPROVE_TOOLS_CAPABILITY = "element:chat:auto_approve_tools";
 
 const APPROVAL_MODE_OPTIONS: {
   value: ApprovalMode;
@@ -308,6 +309,7 @@ const toggleApprovalMenu = () => {
 };
 
 const selectApprovalMode = (mode: ApprovalMode) => {
+  if (mode === "allow" && !canAutoApproveTools.value) return;
   emit("update:approvalMode", mode);
   showApprovalMenu.value = false;
 };
@@ -465,6 +467,32 @@ const modelDropdownRef = ref<HTMLElement | null>(null);
 
 const activeApprovalMode = computed(
   () => props.approvalMode || "ask",
+);
+
+const canAutoApproveTools = computed(() => {
+  if (String(props.currentUser?.role || "").toLowerCase() === "admin") return true;
+  const permissions = props.currentUser?.permissions;
+  if (Array.isArray(permissions)) {
+    return permissions.includes(AUTO_APPROVE_TOOLS_CAPABILITY);
+  }
+  const elements = permissions?.elements;
+  return Array.isArray(elements) && elements.includes(AUTO_APPROVE_TOOLS_CAPABILITY);
+});
+
+const availableApprovalModeOptions = computed(() =>
+  APPROVAL_MODE_OPTIONS.filter(
+    (option) => option.value !== "allow" || canAutoApproveTools.value,
+  ),
+);
+
+watch(
+  [() => props.approvalMode, () => props.currentUser, canAutoApproveTools],
+  ([mode, currentUser, canAutoApprove]) => {
+    if (currentUser && mode === "allow" && !canAutoApprove) {
+      emit("update:approvalMode", "ask");
+    }
+  },
+  { immediate: true },
 );
 
 const activeApprovalLabel = computed(() => {
@@ -1747,7 +1775,7 @@ defineExpose({
                                       :class="isMobileViewport ? 'max-h-[min(70vh,420px)] pb-[max(0.75rem,env(safe-area-inset-bottom))]' : 'max-h-[min(50vh,280px)]'"
                                     >
                                         <button
-                                          v-for="option in APPROVAL_MODE_OPTIONS"
+                                          v-for="option in availableApprovalModeOptions"
                                           :key="option.value"
                                           type="button"
                                           role="option"

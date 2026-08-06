@@ -23,6 +23,7 @@ from app.models.saved_report import (
     PortalSavedReportSubscription,
 )
 from app.services.platform_timezone import get_cached_platform_timezone
+from app.services.ai_execution_capability_service import resolve_ai_execution_controls
 
 logger = logging.getLogger(__name__)
 
@@ -391,6 +392,13 @@ async def _scheduled_task_wrapper(task_id: int, is_manual: bool = False):
             task_config = _task_config(task)
             resource_scope = resource_scope_from_task_config(task_config)
             debug_options = debug_options_from_task_config(task_config)
+            debug_options, effective_permission_options = await resolve_ai_execution_controls(
+                session,
+                user_info,
+                debug_options=debug_options,
+                permission_options=permission_options_from_task_config(task_config),
+                reject_on_denied=False,
+            )
             knowledge_ids = knowledge_dataset_ids_from_scope(resource_scope)
             metadata_ids = metadata_dataset_ids_from_scope(resource_scope)
 
@@ -420,7 +428,7 @@ async def _scheduled_task_wrapper(task_id: int, is_manual: bool = False):
                 user_info=user_info,
                 enable_multi_agent=True,
                 debug_options=debug_options,
-                permission_options=permission_options_from_task_config(task_config),
+                permission_options=effective_permission_options,
                 knowledge_dataset_ids=knowledge_ids or None,
                 metadata_dataset_ids=metadata_ids or None,
             )

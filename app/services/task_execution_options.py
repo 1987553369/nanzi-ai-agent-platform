@@ -8,7 +8,7 @@ APPROVAL_MODE_KEY = "approval_mode"
 MODEL_KEY = "model"
 RESOURCE_SCOPE_KEY = "resource_scope"
 VALID_APPROVAL_MODES = frozenset({"ask", "allow", "deny"})
-DEFAULT_APPROVAL_MODE = "allow"
+DEFAULT_APPROVAL_MODE = "ask"
 
 
 def normalize_approval_mode(raw: Any, *, default: str = DEFAULT_APPROVAL_MODE) -> str:

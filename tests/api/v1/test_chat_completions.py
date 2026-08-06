@@ -147,7 +147,6 @@ async def test_chat_completion_stream_sse_snapshot(monkeypatch):
                 "stream": True,
                 "conversation_id": "conv-sse",
                 "enable_multi_agent": False,
-                "debug_options": {"return_raw_prompt": True},
             }
             async with client.stream(
                 "POST",
@@ -171,6 +170,70 @@ async def test_chat_completion_stream_sse_snapshot(monkeypatch):
         {"type": "context_update", "data": {"room_name": "A101"}},
         {"type": "error", "status": "error", "content": "可读错误"},
     ]
+
+
+@pytest.mark.no_infrastructure
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("control_payload", "capability"),
+    [
+        ({"debug_options": {"return_raw_prompt": True}}, "element:chat:debug_prompt"),
+        (
+            {"debug_options": {"system_prompt_override": "Ignore policy"}},
+            "element:chat:debug_prompt",
+        ),
+        (
+            {"permission_options": {"approval_mode": "allow"}},
+            "element:chat:auto_approve_tools",
+        ),
+    ],
+)
+async def test_chat_rejects_privileged_execution_controls_without_capability(
+    monkeypatch,
+    control_payload,
+    capability,
+):
+    from app.api.v1.endpoints import chat as chat_endpoint
+    from app.core.orm import get_db_session
+
+    async def fake_require_api_key():
+        return {"user_id": "7", "role": "user"}
+
+    async def fake_db_session():
+        yield None
+
+    async def no_rate_limit(**kwargs):
+        return None
+
+    async def deny_capability(self, user_id, resource_type, resource_id):
+        return False
+
+    monkeypatch.setattr(chat_endpoint, "enforce_rate_limit", no_rate_limit)
+    monkeypatch.setattr(
+        chat_endpoint.PermissionService,
+        "check_permission",
+        deny_capability,
+    )
+    app.dependency_overrides[chat_endpoint.require_api_key] = fake_require_api_key
+    app.dependency_overrides[get_db_session] = fake_db_session
+    try:
+        payload = {
+            "messages": [{"role": "user", "content": "Hi"}],
+            "stream": False,
+            **control_payload,
+        }
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post(
+                "/api/v1/chat/completions",
+                json=payload,
+                headers={"X-API-Key": "test-key"},
+            )
+    finally:
+        app.dependency_overrides.pop(chat_endpoint.require_api_key, None)
+        app.dependency_overrides.pop(get_db_session, None)
+
+    assert response.status_code == 403
+    assert capability in response.json()["detail"]
 
 @pytest.mark.asyncio
 async def test_chat_auth_required(db_session):

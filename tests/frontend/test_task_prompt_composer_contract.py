@@ -74,6 +74,8 @@ def test_task_center_wires_prompt_composer_into_config():
     assert "resource_scope" in text
     assert "taskModel" in text
     assert "hydrateExecutionOptions" in text
+    assert 'element:chat:auto_approve_tools' in text
+    assert ':can-auto-approve="canAutoApproveTools"' in text
 
 
 def test_scheduler_reads_task_execution_options_from_config():
@@ -83,5 +85,12 @@ def test_scheduler_reads_task_execution_options_from_config():
     assert "debug_options_from_task_config" in scheduler
     assert "knowledge_dataset_ids" in scheduler
     assert "metadata_dataset_ids" in scheduler
-    assert "DEFAULT_APPROVAL_MODE = \"allow\"" in options
+    assert "DEFAULT_APPROVAL_MODE = \"ask\"" in options
     assert "resource_scope" in options
+
+
+def test_auto_approval_is_hidden_without_server_capability():
+    composer = COMPOSER.read_text(encoding="utf-8")
+    assert "canAutoApprove" in composer
+    assert "availableApprovalOptions" in composer
+    assert "mode === 'allow' && !props.canAutoApprove" in composer

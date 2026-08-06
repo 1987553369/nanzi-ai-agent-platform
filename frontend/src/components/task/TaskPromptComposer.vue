@@ -37,11 +37,13 @@ const props = withDefaults(
     approvalMode: TaskApprovalMode
     resourceScope: TaskResourceScope
     agentId?: string | null
+    canAutoApprove?: boolean
   }>(),
   {
     model: '',
-    approvalMode: 'allow',
+    approvalMode: 'ask',
     agentId: null,
+    canAutoApprove: false,
   },
 )
 
@@ -72,6 +74,10 @@ const APPROVAL_OPTIONS: { value: TaskApprovalMode; label: string; description: s
   },
 ]
 
+const availableApprovalOptions = computed(() =>
+  APPROVAL_OPTIONS.filter((option) => option.value !== 'allow' || props.canAutoApprove),
+)
+
 const activePanel = ref<PanelKey>(null)
 const barRef = ref<HTMLElement | null>(null)
 const panelRef = ref<HTMLElement | null>(null)
@@ -96,7 +102,7 @@ const modelLabel = computed(() => {
 })
 
 const approvalLabel = computed(
-  () => APPROVAL_OPTIONS.find((item) => item.value === props.approvalMode)?.label || '自动批准',
+  () => availableApprovalOptions.value.find((item) => item.value === props.approvalMode)?.label || '请求批准',
 )
 
 const selectedChips = computed(() => {
@@ -372,6 +378,7 @@ const selectModel = (modelId: string) => {
 }
 
 const selectApproval = (mode: TaskApprovalMode) => {
+  if (mode === 'allow' && !props.canAutoApprove) return
   emit('update:approvalMode', mode)
   closePanel()
 }
@@ -696,7 +703,7 @@ watch(
         </div>
         <div class="min-h-0 flex-1 overflow-y-auto p-1">
           <button
-            v-for="option in APPROVAL_OPTIONS"
+            v-for="option in availableApprovalOptions"
             :key="option.value"
             type="button"
             class="w-full rounded-lg px-2.5 py-2 text-left"

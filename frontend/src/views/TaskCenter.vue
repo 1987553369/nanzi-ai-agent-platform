@@ -28,23 +28,8 @@ const emptyResourceScope = (): TaskResourceScope => ({
 })
 
 const taskModel = ref('')
-const taskApprovalMode = ref<TaskApprovalMode>('allow')
+const taskApprovalMode = ref<TaskApprovalMode>('ask')
 const taskResourceScope = ref<TaskResourceScope>(emptyResourceScope())
-
-const hydrateExecutionOptions = (config: Record<string, any> | undefined) => {
-  const cfg = config && typeof config === 'object' ? config : {}
-  taskModel.value = String(cfg.model || cfg.model_id || '')
-  const mode = String(cfg.approval_mode || 'allow').toLowerCase()
-  taskApprovalMode.value = mode === 'ask' || mode === 'deny' || mode === 'allow' ? mode : 'allow'
-  const scope = cfg.resource_scope && typeof cfg.resource_scope === 'object' ? cfg.resource_scope : {}
-  taskResourceScope.value = {
-    project_name: String(scope.project_name || ''),
-    datasets: Array.isArray(scope.datasets) ? scope.datasets : [],
-    knowledge_bases: Array.isArray(scope.knowledge_bases) ? scope.knowledge_bases : [],
-    skills: Array.isArray(scope.skills) ? scope.skills : [],
-    mcp_tools: Array.isArray(scope.mcp_tools) ? scope.mcp_tools : [],
-  }
-}
 
 const props = withDefaults(defineProps<{
   /** 个人中心嵌入：管理自己的任务，不依赖 menu:task_center / element:task:manage */
@@ -77,6 +62,37 @@ const route = useRoute()
 // Auth & Permission
 const cachedUser = localStorage.getItem('user_info')
 const userInfo = ref(cachedUser ? JSON.parse(cachedUser) : null)
+const canAutoApproveTools = computed(() => {
+  if (String(userInfo.value?.role || '').toLowerCase() === 'admin') return true
+  const permissions = userInfo.value?.permissions
+  if (Array.isArray(permissions)) {
+    return permissions.includes('element:chat:auto_approve_tools')
+  }
+  const elements = permissions?.elements
+  return Array.isArray(elements) && elements.includes('element:chat:auto_approve_tools')
+})
+
+const hydrateExecutionOptions = (config: Record<string, any> | undefined) => {
+  const cfg = config && typeof config === 'object' ? config : {}
+  taskModel.value = String(cfg.model || cfg.model_id || '')
+  const mode = String(cfg.approval_mode || 'ask').toLowerCase()
+  taskApprovalMode.value =
+    mode === 'deny' || mode === 'ask' || (mode === 'allow' && canAutoApproveTools.value)
+      ? mode
+      : 'ask'
+  const scope = cfg.resource_scope && typeof cfg.resource_scope === 'object' ? cfg.resource_scope : {}
+  taskResourceScope.value = {
+    project_name: String(scope.project_name || ''),
+    datasets: Array.isArray(scope.datasets) ? scope.datasets : [],
+    knowledge_bases: Array.isArray(scope.knowledge_bases) ? scope.knowledge_bases : [],
+    skills: Array.isArray(scope.skills) ? scope.skills : [],
+    mcp_tools: Array.isArray(scope.mcp_tools) ? scope.mcp_tools : [],
+  }
+}
+
+watch(canAutoApproveTools, (allowed) => {
+  if (!allowed && taskApprovalMode.value === 'allow') taskApprovalMode.value = 'ask'
+})
 const isTaskOwner = (task: AgentTask) =>
   String(task.user_id) === String(userInfo.value?.user_id)
 const canManage = computed(() => {
@@ -1752,6 +1768,7 @@ onMounted(async () => {
               :prompt="String(editingTask.prompt || '')"
               :model="taskModel"
               :approval-mode="taskApprovalMode"
+              :can-auto-approve="canAutoApproveTools"
               :resource-scope="taskResourceScope"
               :agent-id="editingTask.agent_id"
               @update:prompt="editingTask.prompt = $event"

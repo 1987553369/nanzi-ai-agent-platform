@@ -22,6 +22,10 @@ from app.utils.fs_access import get_user_uploads_dir
 from app.services.permission_service import PermissionService
 from app.services.conversation_resource_service import ConversationResourceService
 from app.services.resource_scope_normalizer import normalize_resource_scope_for_user
+from app.services.ai_execution_capability_service import (
+    AIExecutionCapabilityDenied,
+    resolve_ai_execution_controls,
+)
 import logging
 
 
@@ -595,6 +599,7 @@ async def get_conversation_model_calls(
     responses={
         200: {"description": "成功响应 (非流式)"},
         400: {"description": "参数错误"},
+        403: {"description": "缺少高风险 AI 执行 Capability"},
         500: {"description": "内部错误"}
     }
 )
@@ -614,8 +619,24 @@ async def create_chat_completion(
         limit=settings.CHAT_RATE_LIMIT,
         window_seconds=settings.RATE_LIMIT_WINDOW_SECONDS,
     )
+    try:
+        effective_debug_options, effective_permission_options = (
+            await resolve_ai_execution_controls(
+                db,
+                user_info,
+                debug_options=completion_request.debug_options,
+                permission_options=completion_request.permission_options,
+            )
+        )
+    except AIExecutionCapabilityDenied as exc:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Capability required: {exc.capability}",
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     # Initialize Request Context for Debugging
-    effective_debug_options = dict(completion_request.debug_options or {})
     # 资源范围只能由服务端会话快照决定，禁止客户端通过 debug_options 注入范围。
     effective_debug_options.pop("resource_scope", None)
     if completion_request.grounding_action:
@@ -718,7 +739,7 @@ async def create_chat_completion(
                     api_key=api_key_str,
                     enable_multi_agent=completion_request.enable_multi_agent,
                     debug_options=effective_debug_options,
-                    permission_options=completion_request.permission_options,
+                    permission_options=effective_permission_options,
                     knowledge_dataset_ids=effective_knowledge_dataset_ids,
                     metadata_dataset_ids=effective_metadata_dataset_ids,
                 ):
@@ -755,7 +776,7 @@ async def create_chat_completion(
             api_key=api_key_str,
             enable_multi_agent=completion_request.enable_multi_agent,
             debug_options=effective_debug_options,
-            permission_options=completion_request.permission_options,
+            permission_options=effective_permission_options,
             knowledge_dataset_ids=effective_knowledge_dataset_ids,
             metadata_dataset_ids=effective_metadata_dataset_ids,
         )

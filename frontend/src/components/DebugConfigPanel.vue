@@ -29,6 +29,7 @@ const props = defineProps<{
   loadingConfig: boolean;
   agentContext: Record<string, any>;
   ragRetrievalMeta?: Record<string, any> | null;
+  canDebugPrompt: boolean;
 }>();
 
 const formatDatasetIds = (ids: unknown) => {
@@ -148,7 +149,7 @@ const handleGroundingChange = () => {
             仅生成 SQL 但不执行。用于安全检查。
           </p>
 
-          <label class="flex items-center space-x-2 cursor-pointer">
+          <label v-if="canDebugPrompt" class="flex items-center space-x-2 cursor-pointer">
             <input
               type="checkbox"
               v-model="config.returnRawPrompt"
@@ -224,7 +225,7 @@ const handleGroundingChange = () => {
         <hr class="border-gray-100" />
 
         <!-- Prompt Override -->
-        <div class="space-y-2">
+        <div v-if="canDebugPrompt" class="space-y-2">
           <div class="flex items-center justify-between">
             <label class="block text-sm font-medium text-gray-700 whitespace-nowrap"
               >系统提示词覆盖 (System Prompt)</label
