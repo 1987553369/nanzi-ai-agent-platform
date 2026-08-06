@@ -85,4 +85,4 @@
 | 2026-08-06 | P1-A | SSO 强制证书校验；CORS 改为显式 Origin 白名单，生产禁止通配符 |
 | 2026-08-06 | P1-B | 增加 Redis Lua 原子限流，覆盖登录、SSO、聊天生成和代码执行，并保留 `Retry-After` |
 | 2026-08-06 | P1-C | 浏览器登录改用 Redis 短期随机 Session，移除响应和 localStorage 中的长期 API Key |
-| 2026-08-06 | 验证 | 后端安全/运行时契约 48 项通过；前端安全/Embed/MCP 契约 19 项通过；全量前端构建仍被仓库既有 TypeScript 错误阻断 |
+| 2026-08-06 | 验证 | 后端安全/运行时契约 62 项通过；浏览器 Session/Markdown/Embed 契约 11 项通过；全量前端构建仍被仓库既有 TypeScript 错误阻断 |
