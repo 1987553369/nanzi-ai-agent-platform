@@ -1,3 +1,5 @@
+-- V111.1: create personal skill publication lineage and immutable versions.
+
 CREATE TABLE IF NOT EXISTS skill_publications (
     id VARCHAR(36) NOT NULL PRIMARY KEY COMMENT '发布谱系 ID，UUID',
     platform_skill_id VARCHAR(128) NULL UNIQUE COMMENT '平台公共技能唯一 ID，首次审核通过时生成',

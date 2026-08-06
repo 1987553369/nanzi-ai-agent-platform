@@ -32,6 +32,25 @@ def test_pg_importer_requires_explicit_target_database():
         module.parse_args([str(PG_PROD / "V0-baseline.sql")])
 
 
+def test_pg_importer_rejects_empty_baseline_version():
+    module = load_apply_sql_module()
+
+    with pytest.raises(SystemExit):
+        module.parse_args(
+            [
+                str(PG_PROD / "V0-baseline.sql"),
+                "--host",
+                "localhost",
+                "--user",
+                "postgres",
+                "--database",
+                "nanzi_demo",
+                "--baseline-through",
+                "",
+            ]
+        )
+
+
 def test_pg_importer_defaults_to_postgresql_port():
     module = load_apply_sql_module()
 
@@ -268,6 +287,39 @@ def test_pg_wrapper_resolves_relative_sql_from_db_prod_directory(tmp_path):
     assert result.returncode == 0
     assert "fake importer invoked" in output
     assert "SQL file not found" not in output
+
+
+def test_pg_wrapper_forwards_baseline_through_option(tmp_path):
+    temp_root = tmp_path / "repo"
+    temp_pg_prod = temp_root / "db-prod-pg"
+    temp_bin = tmp_path / "bin"
+    temp_pg_prod.mkdir(parents=True)
+    temp_bin.mkdir()
+
+    wrapper = temp_pg_prod / "apply-sql.sh"
+    shutil.copy2(PG_PROD / "apply-sql.sh", wrapper)
+    wrapper.chmod(0o755)
+    (temp_pg_prod / "V3-test.sql").write_text("-- test SQL\n", encoding="utf-8")
+
+    fake_python = temp_bin / "python3"
+    fake_python.write_text("#!/bin/sh\nprintf '%s\\n' \"$@\"\n", encoding="utf-8")
+    fake_python.chmod(0o755)
+
+    env = os.environ.copy()
+    env["PATH"] = f"{temp_bin}:{env['PATH']}"
+    result = subprocess.run(
+        ["sh", str(wrapper), "--baseline-through", "2", "V3-test.sql"],
+        input="localhost\n5432\npostgres\n\nnanzi_demo\nyes\n",
+        text=True,
+        capture_output=True,
+        cwd=temp_pg_prod,
+        env=env,
+        check=False,
+    )
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0
+    assert "--baseline-through\n2\n" in output
 
 
 def test_pg_mcp_migration_matches_postgresql_types_and_idempotency():

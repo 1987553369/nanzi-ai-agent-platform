@@ -26,15 +26,32 @@ elif [[ -x "$ROOT_DIR/venv/bin/python" ]]; then
 fi
 
 SQL_FILES=()
+MIGRATION_MODE_ARGS=()
 BASELINE_INCLUDED=false
-if [[ $# -eq 0 ]]; then
-    # 版本文件名由项目约定为 V*.sql，不包含空格；使用命令替换可让 sh
-    # 在切回 Bash 前也能解析整个入口脚本。
-    for sql_file in $(find "$SCRIPT_DIR" -maxdepth 1 -type f -name 'V*.sql' -print | sort -V); do
-        SQL_FILES+=("$sql_file")
-    done
-else
-    for sql_file in "$@"; do
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --baseline-existing)
+            MIGRATION_MODE_ARGS+=("$1")
+            shift
+            continue
+            ;;
+        --baseline-through|--lock-timeout)
+            if [[ $# -lt 2 ]]; then
+                echo "❌ $1 requires a value." >&2
+                exit 1
+            fi
+            MIGRATION_MODE_ARGS+=("$1" "$2")
+            shift 2
+            continue
+            ;;
+        --*)
+            echo "❌ Unsupported migration option: $1" >&2
+            exit 1
+            ;;
+        *)
+            sql_file="$1"
+            ;;
+    esac
         if [[ "$sql_file" = /* ]]; then
             resolved_sql_file="$sql_file"
         elif [[ -f "$CALLER_DIR/$sql_file" ]]; then
@@ -48,6 +65,13 @@ else
             resolved_sql_file="$sql_file"
         fi
         SQL_FILES+=("$resolved_sql_file")
+        shift
+done
+
+if [[ ${#SQL_FILES[@]} -eq 0 ]]; then
+    # 版本文件名由项目约定为 V*.sql，不包含空格。
+    for sql_file in $(find "$SCRIPT_DIR" -maxdepth 1 -type f -name 'V*.sql' -print | sort -V); do
+        SQL_FILES+=("$sql_file")
     done
 fi
 
@@ -90,6 +114,9 @@ echo "  SQL files:"
 for sql_file in "${SQL_FILES[@]}"; do
     echo "    - $sql_file"
 done
+if [[ ${#MIGRATION_MODE_ARGS[@]} -gt 0 ]]; then
+    echo "  Migration mode: ${MIGRATION_MODE_ARGS[*]}"
+fi
 echo "  Password : ******"
 read -r -p "确认无误请输入 YES 继续执行：" CONFIRM_INPUT
 case "$CONFIRM_INPUT" in
@@ -104,19 +131,24 @@ COMMON_ARGS=(
     --host "$PG_HOST"
     --port "$PG_PORT"
     --user "$PG_USER"
-    --password "$PG_PASSWORD"
     --database "$PG_DATABASE"
     --yes
 )
 
-for sql_file in "${SQL_FILES[@]}"; do
-    echo "---------------------------------------------------"
-    echo "🚀 Applying $sql_file..."
-    if ! "$PYTHON_BIN" "$SCRIPT_DIR/apply_sql.py" "$sql_file" "${COMMON_ARGS[@]}"; then
-        echo "❌ Failed to apply $sql_file" >&2
-        exit 1
-    fi
-done
+IMPORT_ARGS=("${COMMON_ARGS[@]}")
+if [[ ${#MIGRATION_MODE_ARGS[@]} -gt 0 ]]; then
+    IMPORT_ARGS+=("${MIGRATION_MODE_ARGS[@]}")
+fi
+IMPORT_ARGS+=("${SQL_FILES[@]}")
+
+echo "---------------------------------------------------"
+echo "🚀 校验迁移清单并在单一数据库锁内执行..."
+if ! NANZI_MIGRATION_PASSWORD="$PG_PASSWORD" \
+    "$PYTHON_BIN" "$SCRIPT_DIR/apply_sql.py" \
+    "${IMPORT_ARGS[@]}"; then
+    echo "❌ 数据库迁移失败。" >&2
+    exit 1
+fi
 
 echo "---------------------------------------------------"
 echo "✅ 所有 PostgreSQL 版本 SQL 文件执行成功。"

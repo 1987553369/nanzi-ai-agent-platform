@@ -27,6 +27,25 @@ def test_parse_args_requires_explicit_database_and_ignores_env(monkeypatch):
         module.parse_args(["db-prod/V0-init_nanzi_ai_agent_metadata.sql"])
 
 
+def test_parse_args_rejects_empty_baseline_version():
+    module = load_apply_sql_module()
+
+    with pytest.raises(SystemExit):
+        module.parse_args(
+            [
+                "db-prod/V1-test.sql",
+                "--host",
+                "localhost",
+                "--user",
+                "root",
+                "--database",
+                "nanzi_demo",
+                "--baseline-through",
+                "",
+            ]
+        )
+
+
 def test_split_sql_skips_database_switching_statements():
     module = load_apply_sql_module()
 
@@ -159,7 +178,41 @@ def test_mysql_wrappers_default_blank_host_and_port_to_localhost(tmp_path):
     assert "Port     : 3306" in output
 
 
-def test_mysql_native_wrapper_resolves_relative_sql_from_db_prod_directory(tmp_path):
+def test_mysql_wrapper_forwards_baseline_through_option(tmp_path):
+    root = Path(__file__).resolve().parents[1]
+    temp_root = tmp_path / "repo"
+    temp_db_prod = temp_root / "db-prod"
+    temp_bin = tmp_path / "bin"
+    temp_db_prod.mkdir(parents=True)
+    temp_bin.mkdir()
+
+    wrapper = temp_db_prod / "apply-sql.sh"
+    shutil.copy2(root / "db-prod" / "apply-sql.sh", wrapper)
+    wrapper.chmod(0o755)
+    (temp_db_prod / "V3-test.sql").write_text("-- test SQL\n", encoding="utf-8")
+
+    fake_python = temp_bin / "python3"
+    fake_python.write_text("#!/bin/sh\nprintf '%s\\n' \"$@\"\n", encoding="utf-8")
+    fake_python.chmod(0o755)
+
+    env = os.environ.copy()
+    env["PATH"] = f"{temp_bin}:{env['PATH']}"
+    result = subprocess.run(
+        ["bash", str(wrapper), "--baseline-through", "2", "V3-test.sql"],
+        input="localhost\n3306\nroot\n\nnanzi_demo\nyes\n",
+        text=True,
+        capture_output=True,
+        cwd=temp_db_prod,
+        env=env,
+        check=False,
+    )
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0
+    assert "--baseline-through\n2\n" in output
+
+
+def test_mysql_native_wrapper_delegates_to_locked_python_runner(tmp_path):
     root = Path(__file__).resolve().parents[1]
     temp_root = tmp_path / "repo"
     temp_db_prod = temp_root / "db-prod"
@@ -170,11 +223,13 @@ def test_mysql_native_wrapper_resolves_relative_sql_from_db_prod_directory(tmp_p
     wrapper = temp_db_prod / "apply-sql-native.sh"
     shutil.copy2(root / "db-prod" / "apply-sql-native.sh", wrapper)
     wrapper.chmod(0o755)
+    shutil.copy2(root / "db-prod" / "apply-sql.sh", temp_db_prod / "apply-sql.sh")
+    (temp_db_prod / "apply-sql.sh").chmod(0o755)
     (temp_db_prod / "V0-test.sql").write_text("-- test SQL\n", encoding="utf-8")
 
-    fake_mysql = temp_bin / "mysql"
-    fake_mysql.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
-    fake_mysql.chmod(0o755)
+    fake_python = temp_bin / "python3"
+    fake_python.write_text("#!/bin/sh\nprintf '%s\\n' 'fake python invoked' \"$@\"\n", encoding="utf-8")
+    fake_python.chmod(0o755)
 
     env = os.environ.copy()
     env["PATH"] = f"{temp_bin}:{env['PATH']}"
@@ -190,6 +245,7 @@ def test_mysql_native_wrapper_resolves_relative_sql_from_db_prod_directory(tmp_p
 
     output = result.stdout + result.stderr
     assert result.returncode == 0
-    assert "Reading" in output
+    assert "原生 mysql 多进程导入器已停用" in output
+    assert "fake python invoked" in output
     assert "V0-test.sql" in output
-    assert "No such file" not in output
+    assert "No such file or directory" not in output

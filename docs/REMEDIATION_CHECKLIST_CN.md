@@ -42,7 +42,7 @@
 | [ ] | OPS-P0-03 | Audit Queue 改有界持久队列并支持重试/DLQ | DB 短时故障不丢审计且内存有上限 |
 | [!] | OPS-P0-04 | 主数据库 HA、PITR、Redis HA/AOF、对象存储与恢复演练 | 在隔离环境达到目标 RPO/RTO |
 | [x] | OPS-P0-05 | 收紧 Compose 默认凭据并补 Redis 基础持久化/健康检查 | 未配置密码时启动即失败；Redis 使用认证、AOF、持久卷和健康依赖 |
-| [ ] | DB-P0-01 | 迁移引入 Ledger、Checksum 和全局锁，修复 MySQL 非原子与重复版本 | MySQL/PostgreSQL Fresh、N-1 Upgrade、重跑测试通过 |
+| [x] | DB-P0-01 | 迁移引入 Ledger、Checksum 和全局锁，修复 MySQL 非原子与重复版本 | MySQL/PostgreSQL Fresh、N-1 Upgrade、重跑测试通过 |
 | [ ] | OPS-P1-01 | 结构化日志、Prometheus、OpenTelemetry、告警和容量预算 | Run 可端到端关联，关键 SLI 有 Dashboard/Alert |
 | [!] | OPS-P1-02 | API、Worker、Scheduler 跨故障域多副本部署 | 实例、Redis 主节点、DB 主节点故障演练通过 |
 
@@ -96,3 +96,5 @@
 | 2026-08-06 | ENG-C 验证 | 相关前端静态契约 127 项通过；1 项未修改的调度器旧源码字符串断言失败；全量构建剩余错误集中在 AgentDebug、DataSourceManagement、EmbedChat、ExampleManagement 和 KnowledgeBaseManagement |
 | 2026-08-06 | ENG-D 验证 | `npm run build` 完整通过（10,386 个模块）；`tests/frontend` 全量 317 项通过；仍有大 Chunk 与静态/动态重复导入构建警告待 ENG-P1-04 处理 |
 | 2026-08-06 | P1-E 验证 | AI 执行能力纯逻辑与迁移契约 16 项通过；`tests/frontend` 全量 320 项通过；`npm run build` 完整通过（10,386 个模块）。聊天 API/任务端点负向测试已补齐，本机因 Python 3.9 且缺少 `aiomysql` 未执行，需由标准 Python 3.11 CI 回归 |
+| 2026-08-06 | DB-A | MySQL/PostgreSQL 统一引入 `nanzi_schema_migrations` 账本、SHA-256 Checksum 和数据库 advisory lock；MySQL DDL 执行前持久化 `in_progress`，PostgreSQL 单版本 SQL 与成功记录同事务；原生 MySQL 入口改为委托安全执行器；重复版本 V31/V110 已消除 |
+| 2026-08-06 | DB-A 验证 | Python 3.11 下 Fresh、重跑、N-1 Upgrade、旧库指定版本基线、Checksum 篡改、脏状态、历史文件缺失、并发锁和 Shell 透传等迁移契约测试 67 项通过；Python 编译、Bash 语法和 `git diff --check` 通过；未连接或修改任何实际数据库 |

@@ -44,7 +44,7 @@ VERSION_COLUMNS = (
 
 
 def test_mysql_skill_publication_migration_has_table_and_column_comments():
-    sql = (REPO_ROOT / "db-prod/V110-create-skill-publications.sql").read_text()
+    sql = (REPO_ROOT / "db-prod/V111.1-create-skill-publications.sql").read_text()
 
     assert "COMMENT='个人技能发布到平台公共技能库的发布谱系'" in sql
     assert "COMMENT='个人技能平台发布的候选与审核版本'" in sql

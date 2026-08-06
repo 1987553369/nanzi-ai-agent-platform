@@ -28,13 +28,13 @@ NanZi 开源智能体平台是企业级的多智能体编排与数据智能洞�
 
 ### 💻 基础工具依赖
 *   **Docker**（建议 v20.10+） 与 **Docker Compose**（建议 v2.0.0+）
-*   **Python**（建议 v3.10+，仅用于本地源码调试或运行 SQL 导入工具。如果直接使用已打好的 Docker 镜像包部署，则无需安装）
+*   **Python**（固定使用 v3.11，用于本地源码调试和安全 SQL 迁移工具。如果直接使用已打好的 Docker 镜像包部署，则无需在宿主机安装）
 *   **Node.js**（建议 v18+ & npm，仅用于本地开发联调或宿主机前端预构建。如果不自行构建镜像且不进行本地源码调试，则无需安装）
 
 ### 🔌 数据库与外部依赖服务
 *   **平台主库（二选一）**：
     *   **MySQL**（建议 v8.0+）：必须支持 `utf8mb4` 字符集，用以存放平台系统级配置、角色权限、审计日志及智能体元数据。
-    *   **PostgreSQL**（建议 v14+）：作为 MySQL 的替代主库；初始化脚本使用 PostgreSQL 原生方言和幂等迁移。
+    *   **PostgreSQL**（建议 v14+）：作为 MySQL 的替代主库；初始化脚本使用 PostgreSQL 原生方言和带账本的版本迁移。
 *   **Redis**：**必须使用支持向量检索的 Redis Stack 版本**（例如 `redis/redis-stack-server:latest`），用以支持平台内部高并发缓存、长期记忆（LTM）向量检索、向量搜索诊断以及分布式异步调度队列（APScheduler）。
 *   **RAGFlow 生态（若使用知识库和 ChatBI，则为必选）**：如需接入非结构化 SOP 知识库或使用 ChatBI 数据洞察功能，必须保证 RAGFlow 服务就绪并提供相应的 API URL 与 API Key。更多信息请参考 [RAGFlow 官网](https://ragflow.io/)。
 
@@ -46,24 +46,25 @@ NanZi 开源智能体平台是企业级的多智能体编排与数据智能洞�
 
 仅当平台主库选择 MySQL 时执行本节。若选择 PostgreSQL，请跳过本节，直接执行 [3.2 主库选项 B：PostgreSQL](#32-主库选项-bpostgresql二选一)。
 
-平台采用版本化迁移管理（数据库脚本位于 `db-prod/` 目录下）。无参数执行导入脚本时，会按版本号依次执行全部 `V*.sql`。
+平台采用带账本的版本迁移管理（数据库脚本位于 `db-prod/`）。无参数执行导入脚本时，
+会自然排序全部 `V*.sql`，在单一数据库锁内校验 Checksum 并执行尚未成功的版本。
 
 > **目标库不存在时会自动创建。**  
 > 导入器连接 MySQL 后，若你输入的目标库名尚不存在，会自动执行  
 > `CREATE DATABASE IF NOT EXISTS \`...\` CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci`，  
-> 无需事先手工建库。每个版本文件开始前都会再次确保目标库存在（已存在时可能打印无害 Warning，可忽略）。
+> 无需事先手工建库。脚本不会忽略 DDL 错误；任何 SQL 错误都会停止迁移并记录失败状态。
 
-1.  **准备依赖（途径一需要）**：
+1.  **准备依赖**：
     ```bash
-    python3 -m venv venv
+    python3.11 -m venv venv
     source venv/bin/activate
     pip install -r requirements.txt
     ```
     MySQL 建议使用 **v8.0+**，字符集以 `utf8mb4` 为准。
 
-2.  **执行结构自动初始化（提供以下两种途径）**：
+2.  **执行结构自动初始化**：
 
-    *   **途径一：使用 Python 工具导入（推荐）**
+    *   **安全迁移入口（推荐）**
         ```bash
         # 推荐：在项目根目录执行
         chmod +x db-prod/apply-sql.sh
@@ -76,13 +77,14 @@ NanZi 开源智能体平台是企业级的多智能体编排与数据智能洞�
         脚本会依次询问 Host、Port、User、Password 和目标数据库，并要求输入 `YES` 确认。  
         无参数时会执行 `db-prod/V*.sql` 全部版本文件。
 
-    *   **途径二：免 Python 依赖的纯 Shell 脚本导入**
-        仅依赖系统已安装的 `mysql` 命令行客户端。具备与 Python 脚本等价的幂等性过滤机制（自动跳过重复建表、重复列等容错）：
+    *   **历史兼容入口**
+        `apply-sql-native.sh` 已停用原生多进程导入，当前会委托给同一个 Python 安全执行器，
+        以保证数据库全局锁和账本更新覆盖整个批次：
         ```bash
         chmod +x db-prod/apply-sql-native.sh
         ./db-prod/apply-sql-native.sh
         ```
-        *注：根据提示输入 Host、Port、User、Password 及数据库名，输入 `YES` 即可。目标库同样会在不存在时自动创建。*
+        *注：该兼容入口同样要求 Python 3.11 及 `aiomysql`。*
 
 3.  **交互导入示例**（首次部署，目标库可不预先创建）：
 
@@ -120,23 +122,27 @@ NanZi 开源智能体平台是企业级的多智能体编排与数据智能洞�
 
     *说明：*
     *   生产环境请将 `Target database` 换成正式库名（如 `nanzi_ai_agent_platform`），并与 `.env` 中的 `MYSQL_DB` / `MYSQL_DATABASE` 保持一致。
-    *   若库已存在，后续版本执行时可能出现 `Can't create database '...'; database exists` 的 Warning，属于幂等确保逻辑，可忽略。
+    *   已成功版本由 `nanzi_schema_migrations` 账本和 Checksum 判断并跳过，不能通过忽略“对象已存在”错误实现重跑。
     *   可选：仍可事先手工建库（字符集须为 `utf8mb4`），例如：
         ```sql
         CREATE DATABASE IF NOT EXISTS `nanzi_ai_agent_platform` CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
         ```
 
-4.  **导入默认管理员账号与预置 API Key（可选）**：
-    若是首次部署，建议导入管理员数据以建立系统初始连接。
-    *提示：在第 2 步执行结构初始化时，导入脚本在执行完毕后会**自动弹出询问一键级联导入该数据**，若您当时已选择导入，此步骤可跳过。若当时选择了跳过，也可通过以下命令随时**手动单独导入**：*
-    *   **使用 Python 工具**：
-        ```bash
-        ./db-prod/apply-sql.sh db-prod/INIT-USER-ADMIN.sql
-        ```
-    *   **使用纯 Shell 脚本**：
-        ```bash
-        ./db-prod/apply-sql-native.sh db-prod/INIT-USER-ADMIN.sql
-        ```
+4.  **创建随机管理员凭据（可选）**：
+    首次全量初始化完成后，脚本会询问是否创建管理员。若当时跳过，可稍后运行：
+    ```bash
+    ./db-prod/create-admin-user.sh
+    ./db-prod/create-admin-key.sh admin
+    ```
+    仓库不提供固定默认 API Key，明文凭据只显示一次。
+
+5.  **旧 MySQL 环境首次启用账本**：
+    已有业务表但没有迁移账本时，脚本会拒绝从 V0 重放。先备份并由 DBA 核对真实完成版本，
+    再执行：
+    ```bash
+    ./db-prod/apply-sql.sh --baseline-through <当前版本>
+    ```
+    `failed` / `in_progress` 状态不会自动重试，必须人工核对实际 Schema 后处置。
 
 详细的库表结构说明，请参考：[db-prod/README.md](db-prod/README.md)。
 
@@ -148,7 +154,7 @@ NanZi 开源智能体平台是企业级的多智能体编排与数据智能洞�
 
 平台同时提供独立的 PostgreSQL 初始化入口，脚本位于 `db-prod-pg/`，不会修改现有
 `db-prod/` MySQL 迁移链。新环境会按版本号自动执行 `V0-baseline.sql`、`V1-...sql`
-等全部版本文件；重复执行是安全的，V1 配置对齐迁移不会覆盖已有环境配置值。
+等全部版本文件。重复运行时只跳过账本中 Checksum 一致的成功版本。
 
 > **目标库不存在时会自动创建。**  
 > 导入器连接 PostgreSQL 后，若你输入的目标库名尚不存在，会自动执行 `CREATE DATABASE ... WITH ENCODING 'UTF8'`，无需事先手工建库。  
@@ -156,7 +162,7 @@ NanZi 开源智能体平台是企业级的多智能体编排与数据智能洞�
 
 1.  **准备依赖**：
     ```bash
-    python3 -m venv venv
+    python3.11 -m venv venv
     source venv/bin/activate
     pip install -r requirements.txt
     ```
@@ -172,7 +178,7 @@ NanZi 开源智能体平台是企业级的多智能体编排与数据智能洞�
     cd db-prod-pg
     sh apply-sql.sh
     ```
-    无参数时，脚本会按版本号排序，依次执行当前目录下全部 `V*.sql`（如 `V0` ~ `V9`）。  
+    无参数时，脚本会按版本号自然排序，在一个 advisory lock 内执行当前目录全部 `V*.sql`。
     脚本会依次询问 Host、Port、User、Password 和目标数据库，并要求输入 `YES` 确认。  
     全部 SQL 成功后，会询问是否顺带创建默认管理员 `admin` 并生成 API Key。
 
@@ -204,13 +210,13 @@ NanZi 开源智能体平台是企业级的多智能体编排与数据智能洞�
         - .../db-prod-pg/V6-enforce_mcp_server_name_uniqueness.sql
         - .../db-prod-pg/V7-add_mcp_tool_availability.sql
         - .../db-prod-pg/V8-enforce_ai_model_id_uniqueness.sql
-        - .../db-prod-pg/V9-add_ai_model_token_limits.sql
+        - .../db-prod-pg/V15-add_ai_execution_capabilities_compat.sql
       Password : ******
     确认无误请输入 YES 继续执行：yes
     ---------------------------------------------------
     🚀 Applying .../V0-baseline.sql ...
     ✅ SQL applied successfully.
-    ...（V1 ~ V9 依次执行，全部 ✅）
+    ...（已登记版本校验后跳过，新版本依次执行）
     ---------------------------------------------------
     ✅ 所有 PostgreSQL 版本 SQL 文件执行成功。
     ---------------------------------------------------
@@ -224,7 +230,11 @@ NanZi 开源智能体平台是企业级的多智能体编排与数据智能洞�
     *说明：*
     *   生产环境请将 `Target database` 换成正式库名（如 `nanzi_ai_agent_platform`），并与下文 `.env` 中的 `POSTGRES_DB` 保持一致。
     *   若只需升级单个版本，可显式传文件，例如：  
-        `./db-prod-pg/apply-sql.sh db-prod-pg/V9-add_ai_model_token_limits.sql`
+        `./db-prod-pg/apply-sql.sh db-prod-pg/V15-add_ai_execution_capabilities_compat.sql`
+
+    *   已有业务表但没有迁移账本时，先备份并核对真实完成版本，再执行：
+        `./db-prod-pg/apply-sql.sh --baseline-through <当前版本>`
+    *   历史迁移 Checksum 不一致或状态为 `failed` / `in_progress` 时，禁止自动重试，必须人工核对。
 
 4.  **管理员初始化与凭证维护（若第 2 步已选 Y 可跳过）**：
     PostgreSQL 基线不写入固定管理员 API Key。初始化时选择 `Y` 会使用当前
@@ -297,29 +307,18 @@ NanZi 开源智能体平台是企业级的多智能体编排与数据智能洞�
         ```
         *注：因容器是网络隔离的沙箱，主库 Host 和 `REDIS_HOST` 均严禁配置为 `localhost` 或 `127.0.0.1`。使用 MySQL 时填写 `MYSQL_HOST`，使用 PostgreSQL 时填写 `POSTGRES_HOST`，可设置为宿主机局域网 IP 或 `host.docker.internal`。*
         *   **`DATABASE_TYPE`（默认 `mysql`）**：选择平台主库类型。设置为 `mysql` 时使用 `MYSQL_*`，设置为 `postgresql` 时使用 `POSTGRES_*`。
-        *   **`ENCRYPTION_KEY`（必填）**：用户 API Key 的 Fernet 对称加密密钥（用于加密入库 / 后台解密查看）。MySQL 的 `db-prod/INIT-USER-ADMIN.sql` 固定管理员 Key 只在保持 `env.example` 默认密钥时有效；PostgreSQL 不写入固定管理员凭证，会在初始化或手动创建时使用当前密钥生成管理员。生成新密钥示例：
+        *   **`ENCRYPTION_KEY`（必填）**：用户 API Key 的 Fernet 对称加密密钥（用于加密入库 / 后台解密查看）。MySQL 和 PostgreSQL 都不提供固定管理员凭据，应使用当前密钥现场生成。生成新密钥示例：
             ```bash
             python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
             ```
 
         ##### 如何创建 / 重建 admin 
-        *   **MySQL**：`.env` 中 `ENCRYPTION_KEY` 仍为 `env.example` 默认值时，可导入预置脚本：
+        *   **MySQL**：使用当前 `.env` 现场生成管理员和一次性 API Key：
             ```bash
-            ./db-prod/apply-sql-native.sh db-prod/INIT-USER-ADMIN.sql
-            # 或：./db-prod/apply-sql.sh db-prod/INIT-USER-ADMIN.sql
+            ./db-prod/create-admin-user.sh
+            ./db-prod/create-admin-key.sh admin
+            ./db-prod/reset-admin-password.sh admin
             ```
-            登录使用文档「首次登录指引」中的默认 API Key。
-        *   **MySQL（已修改 ENCRYPTION_KEY）**：用当前 `.env` 里的密钥现场生成管理员：
-            ```bash
-            # 若库中已有旧 admin，先删除再创建
-            # mysql ... -e "DELETE FROM ai_agent_users WHERE user_name = 'admin';"
-
-            source venv/bin/activate   # 或 .venv
-            export PYTHONPATH=.
-            python scripts/create_admin_user.py
-            # 也可指定用户名：python scripts/create_admin_key.py <username>
-            ```
-            终端会打印**仅此一次**的 API Key，请立即保存并用该 Key 登录。
         *   **PostgreSQL**：不使用 MySQL 的 `INIT-USER-ADMIN.sql`，执行以下脚本：
             ```bash
             ./db-prod-pg/create-admin-user.sh
@@ -423,9 +422,9 @@ NanZi 开源智能体平台是企业级的多智能体编排与数据智能洞�
 *   **原因**：未激活 Python 虚拟环境，或未在此虚拟环境下正确运行依赖安装。
 *   **解决**：必须先在根目录下激活虚拟环境（`source venv/bin/activate`），运行 `pip install -r requirements.txt`，确保 MySQL 导入所需的 `aiomysql` 或 PostgreSQL 导入所需的 `psycopg` 已安装。
 
-### Q4: 改了 `ENCRYPTION_KEY` 后，默认 admin API Key 登录失败 / 后台解不开 Key
-*   **原因**：MySQL 的 `env.example` 默认 `ENCRYPTION_KEY` 与 `INIT-USER-ADMIN.sql` 里预置的 admin 密文是一对的。改了密钥后，预置密文无法再用新密钥解密；PostgreSQL 本身不使用固定预置 Key，但已经创建的凭证同样依赖当时的密钥。
-*   **解决**：MySQL 不要再依赖 `INIT-USER-ADMIN.sql` 中的默认 Key，PostgreSQL 则直接使用对应目录的管理员脚本按当前配置重新生成：
+### Q4: 改了 `ENCRYPTION_KEY` 后，已有 admin API Key 登录失败 / 后台解不开 Key
+*   **原因**：已经写入数据库的凭据依赖创建时使用的加密密钥；直接更换密钥不会自动重加密存量数据。
+*   **解决**：恢复旧密钥完成有审计的密钥轮换，或在确认影响范围后使用对应数据库目录的管理员脚本重新生成凭据：
     ```bash
     source venv/bin/activate
     export PYTHONPATH=.
@@ -435,4 +434,4 @@ NanZi 开源智能体平台是企业级的多智能体编排与数据智能洞�
     # ./db-prod-pg/create-admin-key.sh
     # ./db-prod-pg/reset-admin-password.sh
     ```
-    保存终端输出的新 API Key 后登录。若希望继续用初始化脚本里的默认 admin，请将 `ENCRYPTION_KEY` 保持为 `env.example` 中的默认值。
+    保存终端输出的新 API Key 后登录。仓库不提供可恢复的默认管理员 API Key。

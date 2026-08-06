@@ -24,7 +24,7 @@ Create:
 
 - `app/models/skill_publication.py` — SQLAlchemy publication lineage and version records.
 - `app/services/skill_publication_service.py` — secure snapshot creation, review transitions, materialization, status enrichment, and recovery helpers.
-- `db-prod/V110-create-skill-publications.sql` — MySQL schema.
+- `db-prod/V111.1-create-skill-publications.sql` — MySQL schema.
 - `db-prod-pg/V10-create-skill-publications.sql` — PostgreSQL schema.
 - `tests/services/test_skill_publication_service.py` — no-infrastructure service and filesystem tests.
 - `tests/api/portal/test_skill_publication_routes.py` — route-level permission and state-transition tests.
@@ -41,7 +41,7 @@ Modify:
 
 **Files:**
 - Create: `app/models/skill_publication.py`
-- Create: `db-prod/V110-create-skill-publications.sql`
+- Create: `db-prod/V111.1-create-skill-publications.sql`
 - Create: `db-prod-pg/V10-create-skill-publications.sql`
 - Test: `tests/services/test_skill_publication_service.py`
 

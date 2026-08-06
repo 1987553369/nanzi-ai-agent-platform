@@ -17,13 +17,39 @@ CALLER_DIR="$PWD"
 cd "$ROOT_DIR"
 
 
-if [ -f "venv/bin/activate" ]; then
-    source venv/bin/activate
+PYTHON_BIN="python3"
+if [[ -x "$ROOT_DIR/.venv/bin/python" ]]; then
+    PYTHON_BIN="$ROOT_DIR/.venv/bin/python"
+elif [[ -x "$ROOT_DIR/venv/bin/python" ]]; then
+    PYTHON_BIN="$ROOT_DIR/venv/bin/python"
 fi
 
 SQL_FILES=()
-if [ $# -gt 0 ]; then
-    for sql_file in "$@"; do
+MIGRATION_MODE_ARGS=()
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --baseline-existing)
+            MIGRATION_MODE_ARGS+=("$1")
+            shift
+            continue
+            ;;
+        --baseline-through|--lock-timeout)
+            if [ $# -lt 2 ]; then
+                echo "❌ $1 requires a value."
+                exit 1
+            fi
+            MIGRATION_MODE_ARGS+=("$1" "$2")
+            shift 2
+            continue
+            ;;
+        --*)
+            echo "❌ Unsupported migration option: $1"
+            exit 1
+            ;;
+        *)
+            sql_file="$1"
+            ;;
+    esac
         if [[ "$sql_file" = /* ]]; then
             resolved_sql_file="$sql_file"
         elif [ -f "$CALLER_DIR/$sql_file" ]; then
@@ -36,7 +62,20 @@ if [ $# -gt 0 ]; then
             resolved_sql_file="$sql_file"
         fi
         SQL_FILES+=("$resolved_sql_file")
-    done
+        shift
+done
+
+RUN_ALL=false
+if [ ${#SQL_FILES[@]} -eq 0 ]; then
+    RUN_ALL=true
+    while IFS= read -r sql_file; do
+        SQL_FILES+=("$sql_file")
+    done < <(find "$SCRIPT_DIR" -maxdepth 1 -type f -name 'V*.sql' -print | sort -V)
+fi
+
+if [ ${#SQL_FILES[@]} -eq 0 ]; then
+    echo "❌ No SQL files found."
+    exit 1
 fi
 
 read -r -p "MySQL host [localhost]: " MYSQL_HOST_INPUT
@@ -61,10 +100,9 @@ echo "  Port     : $MYSQL_PORT_INPUT"
 echo "  User     : $MYSQL_USER_INPUT"
 echo "  Database : $MYSQL_DATABASE_INPUT"
 echo "  Password : ******"
-if [ $# -eq 0 ]; then
-    echo "  SQL files: db-prod/V*.sql"
-else
-    echo "  SQL file : ${SQL_FILES[*]}"
+echo "  SQL files: ${SQL_FILES[*]}"
+if [ ${#MIGRATION_MODE_ARGS[@]} -gt 0 ]; then
+    echo "  Migration mode: ${MIGRATION_MODE_ARGS[*]}"
 fi
 read -r -p "确认无误请输入 YES 继续执行：" CONFIRM_INPUT
 CONFIRM_UPPER=$(echo "$CONFIRM_INPUT" | tr '[:lower:]' '[:upper:]')
@@ -77,37 +115,26 @@ COMMON_ARGS=(
     --host "$MYSQL_HOST_INPUT"
     --port "$MYSQL_PORT_INPUT"
     --user "$MYSQL_USER_INPUT"
-    --password "$MYSQL_PASSWORD_INPUT"
     --database "$MYSQL_DATABASE_INPUT"
     --yes
 )
 
-if [ $# -eq 0 ]; then
-    echo "No arguments provided. Running all SQL files from db-prod/..."
-    DB_DIR="db-prod"
-    
-    if [ ! -d "$DB_DIR" ]; then
-        echo "❌ Directory $DB_DIR not found!"
-        exit 1
-    fi
+IMPORT_ARGS=("${COMMON_ARGS[@]}")
+if [ ${#MIGRATION_MODE_ARGS[@]} -gt 0 ]; then
+    IMPORT_ARGS+=("${MIGRATION_MODE_ARGS[@]}")
+fi
+IMPORT_ARGS+=("${SQL_FILES[@]}")
 
-    # Sort files by version (V1, V2, ... V10)
-    FILES=$(ls "$DB_DIR"/V*.sql 2>/dev/null | sort -V)
-    
-    if [ -z "$FILES" ]; then
-        echo "❌ No SQL files found in $DB_DIR/"
-        exit 1
-    fi
-    
-    for f in $FILES; do
-        echo "---------------------------------------------------"
-        echo "🚀 Applying $f..."
-        python3 db-prod/apply_sql.py "$f" "${COMMON_ARGS[@]}"
-        if [ $? -ne 0 ]; then
-             echo "❌ Failed to apply $f"
-             exit 1
-        fi
-    done
+echo "---------------------------------------------------"
+echo "🚀 校验迁移清单并在单一数据库锁内执行..."
+if ! NANZI_MIGRATION_PASSWORD="$MYSQL_PASSWORD_INPUT" \
+    "$PYTHON_BIN" "$SCRIPT_DIR/apply_sql.py" \
+    "${IMPORT_ARGS[@]}"; then
+    echo "❌ 数据库迁移失败。"
+    exit 1
+fi
+
+if [ "$RUN_ALL" = true ]; then
     echo "---------------------------------------------------"
     echo "✅ 所有数据库结构初始化迁移 SQL 文件执行成功。"
     
@@ -132,6 +159,5 @@ if [ $# -eq 0 ]; then
         echo "💡 已跳过默认管理员账号数据的导入。"
     fi
 else
-    python3 db-prod/apply_sql.py "${SQL_FILES[@]}" "${COMMON_ARGS[@]}"
     echo "💡 SQL 执行完成。管理员请使用 ./db-prod/create-admin-user.sh 单独创建。"
 fi
