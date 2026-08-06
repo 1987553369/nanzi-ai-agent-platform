@@ -59,6 +59,7 @@ interface ChatBIExample {
   rag_synced_at?: string;
   created_at: string;
   user_real_name?: string;
+  user_account_name?: string;
   agent_display_name?: string;
 }
 

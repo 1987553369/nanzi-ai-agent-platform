@@ -958,7 +958,7 @@
                                                                   @open-canvas="handleOpenCanvas"
                                                                 />
                                                                 <DatasetCapabilityMenu
-                                                                  v-else
+                                                                  v-else-if="msg.datasetNavigation"
                                                                   :payload="msg.datasetNavigation"
                                                                   @quick-question="handleQuickQuestion"
                                                                   @record-question-click="(payload) => recordDatasetMenuQuestionClick(msg.datasetNavigation, payload)"
@@ -2189,6 +2189,7 @@ import { parseSkillCreatedMarker, type SkillCreatedInfo } from "@/utils/skillCre
 import AttachmentImageThumb from "@/components/embed/AttachmentImageThumb.vue";
 import SessionResourceScopeBar from "@/components/embed/SessionResourceScopeBar.vue";
 import ResourceScopeModal from "@/components/embed/ResourceScopeModal.vue";
+import type { ResourceScopeGroup, ResourceScopeGroupKey } from "@/types/resourceScope";
 import { isImageAttachment } from "@/utils/attachmentImages";
 import { isDirectRenderableUrl, resolvePublicUploadsPreviewUrl } from "@/utils/workspaceFilePreview";
 import TraceLogViewer from "@/components/TraceLogViewer.vue";
@@ -2442,6 +2443,7 @@ function getSkillFlowBadgesForMessage(msg: Message, allMessages: Message[]): Ski
   let files: ChatFile[] = [];
   for (let i = idx - 1; i >= 0; i--) {
     const prev = allMessages[i];
+    if (!prev) continue;
     if (prev.role === 'user') {
       files = prev.files || [];
       break;
@@ -3053,9 +3055,8 @@ const {
 const resourceScopeDraft = reactive({ project_name: '', datasets: '', knowledge_bases: '', skills: '', mcp_tools: '' });
 const resourceOptionsLoading = ref(false);
 const resourceOptionsLoaded = ref(false);
-const resourceOptionSearch = reactive<Record<string, string>>({ datasets: '', knowledge_bases: '', skills: '', mcp_tools: '' });
-const resourceOptions = reactive<Record<string, any[]>>({ datasets: [], knowledge_bases: [], skills: [], mcp_tools: [] });
-type ResourceScopeGroupKey = 'datasets' | 'knowledge_bases' | 'skills' | 'mcp_tools';
+const resourceOptionSearch = reactive<Record<ResourceScopeGroupKey, string>>({ datasets: '', knowledge_bases: '', skills: '', mcp_tools: '' });
+const resourceOptions = reactive<Record<ResourceScopeGroupKey, any[]>>({ datasets: [], knowledge_bases: [], skills: [], mcp_tools: [] });
 
 const emptyResourceScopeState = () => ({
   project_name: '',
@@ -3065,7 +3066,7 @@ const emptyResourceScopeState = () => ({
   mcp_tools: [] as any[],
 });
 
-const resourceOptionGroups: { key: ResourceScopeGroupKey; label: string; shortLabel?: string; hint: string }[] = [
+const resourceOptionGroups: ResourceScopeGroup[] = [
   {
     key: 'datasets',
     label: '数据集',
@@ -3216,7 +3217,7 @@ const modalSelectedChips = (type: ResourceScopeGroupKey) => {
   return modalDraftSelections(type).map((item: any, index: number) => ({
     key: resourceScopeEntryKey(type, item, index),
     item,
-    label: item.name || item.id || '未命名',
+    label: String(item.name || item.id || '未命名'),
     orphan: orphans.has(item),
   }));
 };
@@ -3225,9 +3226,10 @@ const resourceModalOptionSelected = (type: ResourceScopeGroupKey, option: any) =
   modalDraftSelections(type).some((item) => resourceEntryMatchesOption(item, option));
 
 const resourceOptionInitial = (option: any) => String(option.name || option.id || '?').trim().charAt(0).toUpperCase();
-const resourceOptionAccent = (index: number) => ['bg-teal-500', 'bg-lime-500', 'bg-violet-500', 'bg-green-500', 'bg-sky-500'][index % 5];
+const resourceOptionAccent = (index: number) =>
+  ['bg-teal-500', 'bg-lime-500', 'bg-violet-500', 'bg-green-500', 'bg-sky-500'][index % 5] || 'bg-teal-500';
 
-const filteredResourceOptions = (type: string) => {
+const filteredResourceOptions = (type: ResourceScopeGroupKey) => {
   const query = (resourceOptionSearch[type] || '').trim().toLowerCase();
   return (resourceOptions[type] || []).filter((item: any) =>
     !query
@@ -3493,7 +3495,7 @@ const mountMcpToolToSession = async (toolsInput: Array<{ id: string; name: strin
   try {
     await persistResourceScope(buildPersistableScope(nextScope));
     showToast(
-      toAdd.length === 1 ? `已挂载 MCP 工具：${toAdd[0].name}` : `已挂载 ${toAdd.length} 个 MCP 工具`,
+      toAdd.length === 1 ? `已挂载 MCP 工具：${toAdd[0]?.name || ''}` : `已挂载 ${toAdd.length} 个 MCP 工具`,
       'success',
     );
   } catch (error) {
@@ -4119,7 +4121,6 @@ const {
   handleWorkspaceFilePreview,
   handleOpenCanvas,
   closeCanvas,
-  revokeActiveBlobUrl,
 } = useWorkspaceCanvas({
   getConversationId: () => conversationId.value,
   resolveFileUrl,

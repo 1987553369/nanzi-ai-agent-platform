@@ -479,6 +479,7 @@ function getSkillFlowBadgesForMessage(msg: Message, allMessages: Message[]): Ski
   let files: ChatFile[] = [];
   for (let i = idx - 1; i >= 0; i--) {
     const prev = allMessages[i];
+    if (!prev) continue;
     if (prev.role === 'user') {
       files = prev.files || [];
       break;
@@ -1816,7 +1817,6 @@ const {
   handleWorkspaceFilePreview,
   handleOpenCanvas,
   closeCanvas,
-  revokeActiveBlobUrl,
 } = useWorkspaceCanvas({
   getConversationId: () => conversationId.value,
   resolveFileUrl,
@@ -2297,7 +2297,7 @@ const mountMcpToolToSession = async (
       { headers: debugAuthHeaders() },
     );
     showToast(
-      toAdd.length === 1 ? `已挂载 MCP 工具：${toAdd[0].name}` : `已挂载 ${toAdd.length} 个 MCP 工具`,
+      toAdd.length === 1 ? `已挂载 MCP 工具：${toAdd[0]?.name || ""}` : `已挂载 ${toAdd.length} 个 MCP 工具`,
       "success",
     );
   } catch (error) {

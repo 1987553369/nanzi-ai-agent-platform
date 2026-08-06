@@ -167,7 +167,8 @@ def test_personal_center_has_light_horizontal_gutter_without_remounting_tabs():
 
     assert 'class="min-h-full bg-white"' in personal
     assert "rounded-lg shadow-sm border border-gray-200" not in personal
-    assert "activeTab === 'data' ? '' : 'px-4 pb-4 sm:px-6 sm:pb-6'" in personal
+    assert "activeTab === 'data' || activeTab === 'skills' || activeTab === 'mcp' || activeTab === 'tasks'" in personal
+    assert "'px-4 pt-4 pb-4 sm:px-6 sm:pt-5 sm:pb-6'" in personal
     assert "dashboardContentSpacing" in dashboard
     assert 'route.name === "AIChat"' in dashboard
     assert 'route.name === "PersonalCenter"' in dashboard

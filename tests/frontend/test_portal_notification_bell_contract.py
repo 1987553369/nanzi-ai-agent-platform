@@ -25,7 +25,10 @@ def test_manual_saved_report_runs_follow_notification_policy():
     scheduler = (ROOT / "app/services/ai/scheduler_service.py").read_text(encoding="utf-8")
     endpoint = (ROOT / "app/api/portal/endpoints/saved_reports.py").read_text(encoding="utf-8")
     assert 'trigger_label = "手动触发" if is_manual else "定时触发"' in scheduler
-    assert "if subscription.notify_on_success:" in scheduler
+    assert "if subscription.notify_on_success and alert_evaluation.hit:" in scheduler
+    assert 'condition_type = str(spec.get("type") or "always")' in (
+        ROOT / "app/services/saved_report_subscription_service.py"
+    ).read_text(encoding="utf-8")
     assert "if not is_manual and subscription.notify_on_success" not in scheduler
     assert "_saved_report_subscription_wrapper(row.id, is_manual=True)" in endpoint
 

@@ -67,7 +67,6 @@ def test_both_chat_surfaces_use_shared_workspace_canvas_lifecycle():
         "handleWorkspaceFilePreview",
         "handleOpenCanvas",
         "closeCanvas",
-        "revokeActiveBlobUrl",
     ):
         assert name in shared
         assert name in embed
@@ -80,6 +79,7 @@ def test_both_chat_surfaces_use_shared_workspace_canvas_lifecycle():
         assert "const handleOpenCanvas =" not in source
 
     assert "URL.revokeObjectURL" in shared
+    assert "onUnmounted(revokeActiveBlobUrl)" in shared
     assert "openWorkspaceFileInCanvas" in shared
     assert "shouldAttachWorkspaceSourcePath" in shared
 

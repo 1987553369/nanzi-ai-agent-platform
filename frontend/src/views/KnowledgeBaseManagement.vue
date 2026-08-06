@@ -7,6 +7,13 @@ import { useToast } from '../composables/useToast'
 import { useUser } from '../composables/useUser'
 import { copyToClipboard as copyText } from '../utils/clipboard'
 
+type CustomQuestion = { label: string; query: string }
+type FolderStructure = Record<string, string[]>
+type KnowledgeExtraConfig = Record<string, unknown> & {
+  custom_questions?: CustomQuestion[]
+  folder_structure?: FolderStructure
+}
+
 type KnowledgeBase = {
   id: string
   ragflow_dataset_id?: string
@@ -30,7 +37,7 @@ type KnowledgeBase = {
   can_view_chunks?: boolean
   is_read_only?: boolean
   local_metadata?: {
-    extra_config?: Record<string, unknown>
+    extra_config?: KnowledgeExtraConfig
   }
 }
 
@@ -82,7 +89,7 @@ const searchQuery = ref('')
 const showCreateModal = ref(false)
 const showEditModal = ref(false)
 const aiAnalyzing = ref(false)
-const customQuestions = ref<{ label: string, query: string }[]>([])
+const customQuestions = ref<CustomQuestion[]>([])
 const deletingDataset = ref<KnowledgeBase | null>(null)
 const deletingDocument = ref<KnowledgeDocument | null>(null)
 
@@ -166,10 +173,14 @@ const ragflowApiUrl = computed(() => ragflowConfig.value?.api_url || '未配置'
 const apiData = (response: any) => response?.data?.data ?? response?.data ?? []
 const normalizeTags = (text: string) => text.split(',').map(t => t.trim()).filter(Boolean)
 
-const parseExtraConfig = () => {
+const parseExtraConfig = (): KnowledgeExtraConfig => {
   if (!form.value.extraConfigText.trim()) return {}
   try {
-    return JSON.parse(form.value.extraConfigText)
+    const parsed: unknown = JSON.parse(form.value.extraConfigText)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new Error('扩展配置必须是 JSON 对象')
+    }
+    return parsed as KnowledgeExtraConfig
   } catch {
     throw new Error('扩展配置必须是合法 JSON')
   }
@@ -675,7 +686,7 @@ const confirmRenameFolder = async (dataset: KnowledgeBase, oldName: string) => {
 
   const localMetadata = dataset.local_metadata || {}
   const extraConfig = { ...(localMetadata.extra_config || {}) }
-  const structure = { ...(extraConfig.folder_structure || {}) }
+  const structure: FolderStructure = { ...(extraConfig.folder_structure || {}) }
 
   if (structure[newName]) {
     showToast('该名称的文件夹已存在', 'warning')
@@ -704,7 +715,7 @@ const removeFolder = async (dataset: KnowledgeBase, folderName: string) => {
 
   const localMetadata = dataset.local_metadata || {}
   const extraConfig = { ...(localMetadata.extra_config || {}) }
-  const structure = { ...(extraConfig.folder_structure || {}) }
+  const structure: FolderStructure = { ...(extraConfig.folder_structure || {}) }
 
   delete structure[folderName]
   extraConfig.folder_structure = structure
@@ -721,7 +732,7 @@ const removeFolder = async (dataset: KnowledgeBase, folderName: string) => {
 const moveDocumentToFolder = async (dataset: KnowledgeBase, docId: string, targetFolderName: string | null) => {
   const localMetadata = dataset.local_metadata || {}
   const extraConfig = { ...(localMetadata.extra_config || {}) }
-  const structure = { ...(extraConfig.folder_structure || {}) }
+  const structure: FolderStructure = { ...(extraConfig.folder_structure || {}) }
 
   // 1. 从之前所在的文件夹中移除 docId
   for (const fName in structure) {
@@ -752,7 +763,7 @@ const moveDocumentToFolder = async (dataset: KnowledgeBase, docId: string, targe
 }
 
 // 内部方法：静默保存数据集的本地 extra_config
-const saveDatasetExtraConfig = async (dataset: KnowledgeBase, extraConfig: any) => {
+const saveDatasetExtraConfig = async (dataset: KnowledgeBase, extraConfig: KnowledgeExtraConfig) => {
   const datasetId = dataset.ragflow_dataset_id || dataset.id
   await axios.put(`/api/portal/ragflow/datasets/${datasetId}/metadata`, {
     name: dataset.platform_name || dataset.name,

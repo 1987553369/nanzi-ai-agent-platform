@@ -22,7 +22,10 @@ def test_skill_scope_is_used_for_keys_and_removal():
     source = EMBED.read_text(encoding="utf-8")
     assert "resourceScopeEntryKey" in source
     assert "resourceScopeEntriesMatch" in source
-    assert "resourceScopeEntryKey('skills'" in source or 'resourceScopeEntryKey("skills"' in source
+    assert "key: resourceScopeEntryKey(type, item, index)" in source
+    assert "type ResourceScopeGroupKey" in (
+        ROOT / "frontend" / "src" / "types" / "resourceScope.ts"
+    ).read_text(encoding="utf-8")
     assert "resourceScopeEntriesMatch(entry, item)" in source
     assert "...(item.scope ? { scope: item.scope } : {})" in source
     assert "scope }" in source or "scope: item.scope" in source

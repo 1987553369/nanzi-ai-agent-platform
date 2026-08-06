@@ -15,7 +15,7 @@ const emit = defineEmits<{
   (e: 'update:activeTab', val: PersonalResourceTab): void
   (e: 'open-report', payload: unknown): void
   (e: 'open-conversation', payload: unknown): void
-  (e: 'open-question', payload: unknown): void
+  (e: 'open-question', payload: { query: string; action: 'send' | 'fill' }): void
 }>()
 
 const PersonalMemoryPanel = defineAsyncComponent(

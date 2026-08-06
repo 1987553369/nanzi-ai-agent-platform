@@ -28,7 +28,7 @@
 | [~] | AUTH-P1-04 | Trace、Agent Active Config、上传文件统一对象授权 | Portal Trace/Span 和 Agent 活跃配置已校验所有者/执行权限；上传路径已按用户隔离，仍需浏览器跨用户负向集成测试 |
 | [ ] | AI-P1-01 | Prompt Override、Raw Prompt、工具自动批准改为服务端特权 Capability | 普通请求无法弱化运行策略 |
 | [ ] | ENG-P1-01 | 固定 Python/Node 依赖，拆分 Runtime/Dev/Optional Lock | 干净环境可重复构建，生成 SBOM |
-| [ ] | ENG-P1-02 | 建立 CI：Lint、类型、单测、集成、前端构建、SAST、Secret/依赖/镜像扫描 | PR 必须通过全部门禁 |
+| [~] | ENG-P1-02 | 建立 CI：Lint、类型、单测、集成、前端构建、SAST、Secret/依赖/镜像扫描 | 前端类型检查、生产构建和 317 项契约测试已通过；CI 编排与安全扫描仍待接入 |
 | [ ] | ENG-P1-03 | 统一前端 Auth Store、API Client、SSE Transport、错误模型 | Portal/Embed/Debug 共用协议契约 |
 | [ ] | ENG-P1-04 | 路由懒加载、Bundle Budget、长列表虚拟化 | 首屏体积和性能预算通过 |
 | [ ] | DB-P1-01 | 统一事务 Unit of Work，减少 Service 内部分散 Commit | 部分失败可完整回滚 |
@@ -89,6 +89,8 @@
 | 2026-08-06 | ENG-A | 清理 MCP 表单与 6 个共享前端工具的严格类型错误，全量构建错误集合持续收敛 |
 | 2026-08-06 | ENG-B | 修复报表 Cron、元数据首表、数据门户导航、聊天日志步骤号和 Prompt 优化建议的严格空值类型错误；相关 6 个文件已退出全量构建错误列表 |
 | 2026-08-06 | ENG-C | 补齐知识推荐与模型能力类型，统一 9 种 Markdown 主题契约，收紧场景安装步骤和技能导入文件边界；本批减少 44 个前端构建错误 |
+| 2026-08-06 | ENG-D | 收紧 AgentDebug、数据源、知识库和 Embed 资源范围类型，修正过时契约断言；清零全量前端 TypeScript 错误 |
 | 2026-08-06 | 验证 | 后端安全/运行时契约 65 项通过；浏览器 Session/Markdown/Embed/MCP 契约 13 项通过；全量前端构建仍被仓库既有 TypeScript 错误阻断 |
 | 2026-08-06 | ENG-B 验证 | 相关前端静态契约 25 项通过；1 项未修改的 `PersonalCenter.vue` 旧样式字符串断言失败；全量构建继续暴露其余既有严格类型错误 |
 | 2026-08-06 | ENG-C 验证 | 相关前端静态契约 127 项通过；1 项未修改的调度器旧源码字符串断言失败；全量构建剩余错误集中在 AgentDebug、DataSourceManagement、EmbedChat、ExampleManagement 和 KnowledgeBaseManagement |
+| 2026-08-06 | ENG-D 验证 | `npm run build` 完整通过（10,386 个模块）；`tests/frontend` 全量 317 项通过；仍有大 Chunk 与静态/动态重复导入构建警告待 ENG-P1-04 处理 |

@@ -1,20 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
 import { mcpToolDisplayName as formatMcpToolDisplayName } from "@/utils/mcpToolDisplayName";
-
-type ResourceScopeGroup = {
-  key: string;
-  label: string;
-  shortLabel?: string;
-  hint: string;
-};
-
-type ResourceScopeChip = {
-  key: string;
-  label: string;
-  orphan?: boolean;
-  item: any;
-};
+import type { ResourceScopeChip, ResourceScopeGroup, ResourceScopeGroupKey } from "@/types/resourceScope";
 
 type McpOptionGroup = {
   serverName: string;
@@ -26,19 +13,19 @@ const props = defineProps<{
   visible: boolean;
   draft: Record<string, any>;
   groups: ResourceScopeGroup[];
-  activeTab: string;
+  activeTab: ResourceScopeGroupKey;
   orphanCount: number;
   loading: boolean;
   saving: boolean;
-  optionSearch: Record<string, string>;
-  selectedCount: (key: string) => number;
-  optionTotalCount: (key: string) => number;
+  optionSearch: Record<ResourceScopeGroupKey, string>;
+  selectedCount: (key: ResourceScopeGroupKey) => number;
+  optionTotalCount: (key: ResourceScopeGroupKey) => number;
   skillScopeSelectedCount: (scope: "global" | "personal") => number;
   skillScopeTotalCount: (scope: "global" | "personal") => number;
-  orphanSelections: (key: string) => any[];
-  selectedChips: (key: string) => ResourceScopeChip[];
-  sortedOptions: (key: string) => any[];
-  optionSelected: (key: string, option: any) => boolean;
+  orphanSelections: (key: ResourceScopeGroupKey) => any[];
+  selectedChips: (key: ResourceScopeGroupKey) => ResourceScopeChip[];
+  sortedOptions: (key: ResourceScopeGroupKey) => any[];
+  optionSelected: (key: ResourceScopeGroupKey, option: any) => boolean;
   optionInitial: (option: any) => string;
   optionAccent: (index: number) => string;
 }>();
@@ -47,11 +34,11 @@ const emit = defineEmits<{
   (event: "close"): void;
   (event: "refresh"): void;
   (event: "save"): void;
-  (event: "update:activeTab", value: string): void;
-  (event: "remove-draft", type: string, item: any): void;
-  (event: "toggle-option", type: string, option: any): void;
+  (event: "update:activeTab", value: ResourceScopeGroupKey): void;
+  (event: "remove-draft", type: ResourceScopeGroupKey, item: any): void;
+  (event: "toggle-option", type: ResourceScopeGroupKey, option: any): void;
   /** MCP 分组全选 / 取消全选：selectAll=true 表示全部勾选 */
-  (event: "toggle-group", type: string, options: any[], selectAll: boolean): void;
+  (event: "toggle-group", type: ResourceScopeGroupKey, options: any[], selectAll: boolean): void;
 }>();
 
 const projectNameInput = ref<HTMLInputElement | null>(null);
@@ -145,7 +132,7 @@ const mcpToolDisplayName = (option: any, serverName: string) =>
 
 const optionTitle = (option: any) => String(option?.name || option?.id || "");
 
-const tabCountLabel = (key: string) => {
+const tabCountLabel = (key: ResourceScopeGroupKey) => {
   const selected = Number(props.selectedCount(key) || 0);
   const total = Number(props.optionTotalCount(key) || 0);
   return `(${selected}/${total})`;
