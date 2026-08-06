@@ -392,7 +392,7 @@ export function resolveActiveChartViewMode(
   const series = Array.isArray(options?.series) ? options.series : [];
   const firstType = String(series[0]?.type || "");
   if (firstType === "candlestick" || series.some((item) => seriesHasOhlcData(item))) {
-    return available.includes("candlestick") ? "candlestick" : available[0];
+    return available.includes("candlestick") ? "candlestick" : (available[0] || "table");
   }
   if (firstType === "pie" && available.includes("pie")) return "pie";
   if (firstType === "bar" && available.includes("bar")) return "bar";

@@ -86,4 +86,5 @@
 | 2026-08-06 | P1-B | 增加 Redis Lua 原子限流，覆盖登录、SSO、聊天生成和代码执行，并保留 `Retry-After` |
 | 2026-08-06 | P1-C | 浏览器登录改用 Redis 短期随机 Session，移除响应和 localStorage 中的长期 API Key |
 | 2026-08-06 | P1-D | Portal Trace/Span 与 Agent 活跃配置增加对象授权；MCP 工具执行补分布式限流 |
+| 2026-08-06 | ENG-A | 清理 MCP 表单与 6 个共享前端工具的严格类型错误，全量构建错误集合持续收敛 |
 | 2026-08-06 | 验证 | 后端安全/运行时契约 65 项通过；浏览器 Session/Markdown/Embed/MCP 契约 13 项通过；全量前端构建仍被仓库既有 TypeScript 错误阻断 |

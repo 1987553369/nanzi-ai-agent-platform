@@ -13,7 +13,7 @@ export function parseSkillCreatedMarker(text: string | null | undefined): SkillC
   const match = MARKER_RE.exec(String(text))
   if (!match) return null
   try {
-    const payload = JSON.parse(match[1])
+    const payload = JSON.parse(match[1]!)
     const skillId = String(payload.skill_id || '').trim()
     if (!skillId) return null
     const scope = String(payload.scope || 'personal').toLowerCase() === 'global' ? 'global' : 'personal'

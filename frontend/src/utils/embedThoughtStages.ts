@@ -122,7 +122,8 @@ export function getEmbedThoughtProgressLabel(
   const stages = buildEmbedThoughtStages(logs);
   const active = stages.find((stage) => stage.status === "pending");
   if (active) return STAGE_META[active.id].progress;
-  if (stages.length) return STAGE_META[stages[stages.length - 1].id].progress;
+  const lastStage = stages[stages.length - 1];
+  if (lastStage) return STAGE_META[lastStage.id].progress;
   return "思考中…";
 }
 

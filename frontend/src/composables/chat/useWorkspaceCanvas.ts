@@ -23,7 +23,7 @@ export interface WorkspaceCanvasPayload {
 export interface UseWorkspaceCanvasOptions {
   getConversationId: () => string;
   resolveFileUrl: (url: string) => string;
-  showToast: (message: string, type?: "success" | "error" | "info") => void;
+  showToast: (message: string, type?: "success" | "error" | "warning" | "info") => void;
   normalizeDirectPayloadTitle?: boolean;
 }
 

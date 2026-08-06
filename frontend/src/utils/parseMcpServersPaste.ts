@@ -112,7 +112,7 @@ export const parseMcpServersPaste = (raw: string): ParseMcpServersPasteResult =>
 
   let warning: string | undefined
   if (entries.length > 1) {
-    warning = `检测到 ${entries.length} 个服务，已默认填入第一个「${entries[0].key}」，可修改地址后继续`
+    warning = `检测到 ${entries.length} 个服务，已默认填入第一个「${entries[0]!.key}」，可修改地址后继续`
   }
   const unsupported = entries.filter(
     (e) => e.type && !/sse|http|streamable|streamable_http|streamable-http/i.test(e.type),

@@ -18,6 +18,8 @@ export type CanvasPanelData = {
   title: string
   content: string
   sourcePath?: string
+  langName?: string
+  runnable?: boolean
   compareContent?: string
   compareTitle?: string
 }
