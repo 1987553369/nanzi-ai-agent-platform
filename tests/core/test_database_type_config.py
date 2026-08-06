@@ -64,6 +64,30 @@ def test_development_allows_local_placeholder_configuration():
     settings.validate_runtime_configuration()
 
 
+@pytest.mark.parametrize(
+    ("overrides", "message"),
+    [
+        ({"SSO_API_URL": "http://sso.example.com/login"}, "SSO_API_URL 必须使用 HTTPS"),
+        ({"ALLOWED_ORIGINS": ["*"]}, "ALLOWED_ORIGINS 禁止使用通配符"),
+    ],
+)
+def test_production_rejects_insecure_network_configuration(overrides, message):
+    settings = _build_settings(
+        API_SERVICE_ENV="production",
+        SSO_ACCESS_TOKEN="production-sso-token",
+        **overrides,
+    )
+
+    with pytest.raises(ValueError, match=message):
+        settings.validate_runtime_configuration()
+
+
+def test_cors_defaults_to_same_origin_only():
+    settings = _build_settings()
+
+    assert settings.ALLOWED_ORIGINS == []
+
+
 def test_database_type_accepts_postgresql_override():
     settings = _build_settings(DATABASE_TYPE="postgresql")
 

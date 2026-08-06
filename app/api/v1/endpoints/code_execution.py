@@ -8,6 +8,8 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.core.dependencies import require_api_key
+from app.core.config import settings
+from app.core.rate_limit import enforce_rate_limit
 from app.services.ai.code_execution_service import (
     CodeExecutionValidationError,
     get_execution,
@@ -84,6 +86,12 @@ async def stream_code_execution(
     request: Request,
     user_info: dict[str, Any] = Depends(require_api_key),
 ):
+    await enforce_rate_limit(
+        bucket="code-execution",
+        identifier=str(user_info.get("user_id") or user_info.get("id") or "unknown"),
+        limit=settings.CODE_EXECUTION_RATE_LIMIT,
+        window_seconds=settings.RATE_LIMIT_WINDOW_SECONDS,
+    )
     if not body.code.strip():
         raise HTTPException(status_code=400, detail="代码不能为空。")
     try:

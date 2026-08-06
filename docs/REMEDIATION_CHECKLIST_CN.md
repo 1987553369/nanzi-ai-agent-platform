@@ -22,8 +22,9 @@
 | 状态 | 编号 | 修复项 | 验收条件 |
 |---|---|---|---|
 | [ ] | AUTH-P1-01 | 浏览器改用 HttpOnly/Secure/SameSite 短期 Session，停止 localStorage 长期 API Key | 登录、刷新、退出和撤销测试通过 |
-| [ ] | AUTH-P1-02 | SSO 强制 TLS 校验，删除 `verify=False` | 不可信证书连接失败 |
-| [ ] | AUTH-P1-03 | 登录、LLM、工具、代码执行统一限流 | 分布式限流与 429 契约测试通过 |
+| [x] | AUTH-P1-02 | SSO 强制 TLS 校验，删除 `verify=False` | 不可信证书连接失败 |
+| [x] | AUTH-P1-05 | CORS 默认同源，生产环境禁止通配 Origin 与凭据组合 | 未显式配置的跨域请求不返回 CORS 授权头 |
+| [~] | AUTH-P1-03 | 登录、LLM、工具、代码执行统一限流 | 登录、SSO、聊天生成、代码执行已接入 Redis 原子限流；独立工具执行入口待统一接入 |
 | [ ] | AUTH-P1-04 | Trace、Agent Active Config、上传文件统一对象授权 | 跨用户负向测试通过 |
 | [ ] | AI-P1-01 | Prompt Override、Raw Prompt、工具自动批准改为服务端特权 Capability | 普通请求无法弱化运行策略 |
 | [ ] | ENG-P1-01 | 固定 Python/Node 依赖，拆分 Runtime/Dev/Optional Lock | 干净环境可重复构建，生成 SBOM |
@@ -81,4 +82,6 @@
 | 2026-08-06 | P0-C | 完成固定管理员凭据移除、示例 Secret 占位化、`/live`/`/startup`/`/ready` 与 Graceful Drain |
 | 2026-08-06 | P0-D | 收紧 Compose 默认凭据，启用 Redis requirepass/AOF/健康检查，统一 `LOG_LEVEL` 配置并移除 SSO 固定默认值 |
 | 2026-08-06 | P0-E | 增加生产启动配置校验，拒绝 `CHANGE_ME_*`/`GENERATE_A_*` 占位安全参数 |
+| 2026-08-06 | P1-A | SSO 强制证书校验；CORS 改为显式 Origin 白名单，生产禁止通配符 |
+| 2026-08-06 | P1-B | 增加 Redis Lua 原子限流，覆盖登录、SSO、聊天生成和代码执行，并保留 `Retry-After` |
 | 2026-08-06 | 验证 | 后端安全/运行时契约 48 项通过；前端安全/Embed/MCP 契约 19 项通过；全量前端构建仍被仓库既有 TypeScript 错误阻断 |

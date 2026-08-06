@@ -13,6 +13,7 @@ services:
       # Service Config
       - API_SERVICE_ENV=${API_SERVICE_ENV:-dev}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-[]}
       # 业务默认时区（与系统配置 platform_timezone 默认值一致；无法改 MySQL 时仍可对齐应用写入时间）
       - TZ=${TZ:-Asia/Shanghai}
       - PLATFORM_TIMEZONE=${PLATFORM_TIMEZONE:-Asia/Shanghai}

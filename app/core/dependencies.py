@@ -2,9 +2,7 @@ from fastapi import Header, HTTPException, status, Request, Depends
 from typing import Optional, Dict
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.auth_service import AuthService
-from app.core import redis
 from app.core.orm import get_db_session
-import datetime
 
 async def require_api_key(
     request: Request,
@@ -42,15 +40,15 @@ async def require_api_key(
     return user_info
 
 async def check_rate_limit(user_id: str):
-    """Helper for rate limiting"""
-    r = await redis.get_redis()
-    if r:
-        key = f"rate_limit:{user_id}:{datetime.datetime.now().minute}"
-        current = await r.incr(key)
-        if current == 1:
-            await r.expire(key, 60)
-        if current > 1000:
-            raise HTTPException(status_code=429, detail="Too Many Requests")
+    """Backward-compatible default limiter for callers outside sensitive endpoints."""
+    from app.core.rate_limit import enforce_rate_limit
+
+    await enforce_rate_limit(
+        bucket="authenticated",
+        identifier=str(user_id),
+        limit=1000,
+        window_seconds=60,
+    )
 
 async def require_admin(user: Dict = Depends(require_api_key)) -> Dict:
     """
@@ -134,5 +132,4 @@ async def verify_v1_api_access(
         )
 
     return user_info
-
 

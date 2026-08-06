@@ -27,8 +27,13 @@ class LaplacePortalApiClient(object):
             all_users = []
             
             # 查询 userStatus=0
-            resp_0 = requests.post(url=api_url, headers=headers, data=json.dumps(api_request_all), timeout=30000,
-                                  verify=False)
+            resp_0 = requests.post(
+                url=api_url,
+                headers=headers,
+                data=json.dumps(api_request_all),
+                timeout=30,
+                verify=True,
+            )
             if resp_0.status_code == 200:
                 response_0 = json.loads(resp_0.content)
                 for sso_user in response_0.get('data', []):

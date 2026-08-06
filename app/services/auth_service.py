@@ -194,7 +194,6 @@ class AuthService:
         finally:
             if is_local:
                 await session.close()
-    
     @staticmethod
     async def get_decrypted_api_key(user_id: int, db: Optional[AsyncSession] = None) -> Optional[str]:
         """
@@ -372,7 +371,7 @@ class AuthService:
         }
 
         try:
-            async with httpx.AsyncClient(timeout=settings.SSO_TIMEOUT, verify=False) as client:
+            async with httpx.AsyncClient(timeout=settings.SSO_TIMEOUT, verify=True) as client:
                 response = await client.post(settings.SSO_API_URL, headers=headers, json=api_request)
                 if response.status_code != 200:
                     return {"status": "fail", "message": f"SSO 服务响应异常: {response.status_code}"}
@@ -414,5 +413,3 @@ class AuthService:
         finally:
             if is_local:
                 await session.close()
-
-    

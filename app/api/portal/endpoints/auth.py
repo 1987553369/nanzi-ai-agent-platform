@@ -1,10 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Response, Header
+from fastapi import APIRouter, Depends, HTTPException, status, Response, Header, Request
 from typing import Optional
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.dependencies import require_api_key
 from app.core.orm import get_db_session
 from app.services.auth_service import AuthService
+from app.core.config import settings
+from app.core.rate_limit import enforce_rate_limit
 
 router = APIRouter()
 
@@ -19,13 +21,21 @@ class SSOLoginRequest(BaseModel):
 
 @router.post("/sso/login", summary="SSO 用户登录")
 async def sso_login(
-    request: SSOLoginRequest, 
+    request: SSOLoginRequest,
+    http_request: Request,
     response: Response,
     db: AsyncSession = Depends(get_db_session)
 ):
     """
     Yovole SSO 统一认证登录接口
     """
+    client_host = http_request.client.host if http_request.client else "unknown"
+    await enforce_rate_limit(
+        bucket="sso-login",
+        identifier=f"{client_host}:{request.username.strip().lower()}",
+        limit=settings.LOGIN_RATE_LIMIT,
+        window_seconds=settings.RATE_LIMIT_WINDOW_SECONDS,
+    )
     from app.services.config_service import ConfigService
     if await ConfigService.get("yovole_sso_enabled") != "true":
         raise HTTPException(
@@ -77,13 +87,22 @@ async def sso_login(
 
 @router.post("/login", summary="用户登录")
 async def login(
-    request: LoginRequest, 
+    request: LoginRequest,
+    http_request: Request,
     response: Response,
     db: AsyncSession = Depends(get_db_session)
 ):
     """
     用户登录接口 (支持 API Key 或 账号密码)
     """
+    client_host = http_request.client.host if http_request.client else "unknown"
+    claimed_identity = request.username or request.api_key or "missing"
+    await enforce_rate_limit(
+        bucket="login",
+        identifier=f"{client_host}:{claimed_identity.strip().lower()}",
+        limit=settings.LOGIN_RATE_LIMIT,
+        window_seconds=settings.RATE_LIMIT_WINDOW_SECONDS,
+    )
     user = None
     
     # 1. API Key Login

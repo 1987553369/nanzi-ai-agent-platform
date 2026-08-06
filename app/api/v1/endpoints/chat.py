@@ -14,6 +14,8 @@ from app.services.ai.agent_service import agent_service
 from app.services.ai.export_service import ExportService
 from app.core.context import set_debug_context
 from app.core.dependencies import require_api_key
+from app.core.config import settings
+from app.core.rate_limit import enforce_rate_limit
 from app.schemas.response import StandardResponse
 from app.schemas.agent import TraceLogResponse, AgentExecutionHistoryListResponse
 from app.utils.fs_access import get_user_uploads_dir
@@ -606,6 +608,12 @@ async def create_chat_completion(
     Unified Chat Completion endpoint (V1).
     Supports both standard JSON response and SSE Streaming.
     """
+    await enforce_rate_limit(
+        bucket="chat-completion",
+        identifier=str(user_info.get("user_id") or user_info.get("id") or "unknown"),
+        limit=settings.CHAT_RATE_LIMIT,
+        window_seconds=settings.RATE_LIMIT_WINDOW_SECONDS,
+    )
     # Initialize Request Context for Debugging
     effective_debug_options = dict(completion_request.debug_options or {})
     # 资源范围只能由服务端会话快照决定，禁止客户端通过 debug_options 注入范围。

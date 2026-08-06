@@ -8,8 +8,13 @@ class Settings(BaseSettings):
     API_SERVICE_ENV: str = "dev"
     API_SERVICE_PORT: int = 8001
     LOG_LEVEL: str = "INFO"
-    ALLOWED_ORIGINS: List[str] = ["*"]
+    # Empty means same-origin only. Cross-origin deployments must enumerate origins.
+    ALLOWED_ORIGINS: List[str] = []
     APP_PUBLIC_URL: Optional[str] = None
+    RATE_LIMIT_WINDOW_SECONDS: int = 60
+    LOGIN_RATE_LIMIT: int = 10
+    CHAT_RATE_LIMIT: int = 60
+    CODE_EXECUTION_RATE_LIMIT: int = 10
 
     # Main database type: mysql (default) / postgresql
     DATABASE_TYPE: str = "mysql"
@@ -84,6 +89,10 @@ class Settings(BaseSettings):
             if not str(value or "").strip()
             or str(value).strip().startswith(("CHANGE_ME_", "GENERATE_A_"))
         ]
+        if not self.SSO_API_URL.strip().lower().startswith("https://"):
+            errors.append("SSO_API_URL 必须使用 HTTPS")
+        if "*" in self.ALLOWED_ORIGINS:
+            errors.append("ALLOWED_ORIGINS 禁止使用通配符")
         if errors:
             raise ValueError("生产环境禁止使用占位安全配置: " + ", ".join(errors))
 

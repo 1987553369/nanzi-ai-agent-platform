@@ -255,7 +255,8 @@ async def http_exception_handler(request: Request, exc: HTTPException):
             "timestamp": datetime.datetime.now().isoformat(),
             "trace_id": trace_id,
             "execution_mode": execution_mode
-        }
+        },
+        headers=exc.headers,
     )
 
 @app.exception_handler(Exception)
@@ -284,7 +285,7 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(AccessLogMiddleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.ALLOWED_ORIGINS if settings.ALLOWED_ORIGINS else ["*"],
+    allow_origins=settings.ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["Content-Type", "Authorization", "X-API-Key", "Accept", "Origin", "User-Agent", "DNT", "Cache-Control", "X-Requested-With"],
