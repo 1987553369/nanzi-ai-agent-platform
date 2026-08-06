@@ -356,7 +356,6 @@ import { formatTokenCompact } from "@/utils/tokenFormat";
 const router = useRouter();
 const API_BASE = "";
 
-const apiKey = ref(localStorage.getItem("api_key") || "");
 const userInfo = ref<any>(null);
 const loading = ref(false);
 const period = ref("today");
@@ -392,7 +391,6 @@ const fetchAgentStats = async () => {
     const response = await axios.get(
       `${API_BASE}/api/portal/dashboard/agent-stats`,
       {
-        headers: { "X-API-Key": apiKey.value },
         params: { period: period.value },
       }
     );
@@ -407,7 +405,6 @@ const fetchTrends24h = async () => {
     const response = await axios.get(
       `${API_BASE}/api/portal/dashboard/api-trends-24h`,
       {
-        headers: { "X-API-Key": apiKey.value },
       }
     );
     trends24h.value = response.data;
@@ -422,7 +419,6 @@ const fetchAdminStats = async () => {
     const response = await axios.get(
       `${API_BASE}/api/portal/dashboard/admin-stats`,
       {
-        headers: { "X-API-Key": apiKey.value },
         params: { period: period.value },
       }
     );
@@ -441,7 +437,6 @@ const fetchUserStats = async () => {
     const response = await axios.get(
       `${API_BASE}/api/portal/dashboard/user-stats`,
       {
-        headers: { "X-API-Key": apiKey.value },
         params: { period: period.value },
       }
     );
@@ -459,7 +454,6 @@ const fetchRecentActivities = async () => {
     const response = await axios.get(
       `${API_BASE}/api/portal/dashboard/recent-activities`,
       {
-        headers: { "X-API-Key": apiKey.value },
         params: { limit: 10 },
       }
     );
@@ -474,7 +468,6 @@ const fetchAgentTokens = async () => {
     const response = await axios.get(
       `${API_BASE}/api/portal/dashboard/token-stats/agents`,
       {
-        headers: { "X-API-Key": apiKey.value },
         params: { period: period.value },
       }
     );

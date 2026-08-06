@@ -70,12 +70,6 @@ const homeRoute = computed(() => userInfo.value.role === 'admin' ? '/dashboard' 
 
 const fetchUserInfo = async () => {
   try {
-    const apiKey = localStorage.getItem("api_key");
-    if (!apiKey) {
-      router.push("/login");
-      return;
-    }
-
     // First try to get from localStorage
     const cachedUserInfo = localStorage.getItem("user_info");
     if (cachedUserInfo) {
@@ -92,7 +86,6 @@ const fetchUserInfo = async () => {
   } catch (e) {
     console.error("Auth check failed", e);
     // 拦截器已处理跳转，这里只需清理本地存储
-    localStorage.removeItem("api_key");
     localStorage.removeItem("user_info");
     router.push("/login");
   }

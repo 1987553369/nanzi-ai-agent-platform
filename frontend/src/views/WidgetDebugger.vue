@@ -379,17 +379,6 @@ const contextPayload = ref('{\n  "user_name": "陈小龙",\n  "user_dept": "数�
         return `${agent.display_name || agent.name} (${agent.id})`;
     });
 
-    const resolveStoredApiKey = () => {
-        const directKey = localStorage.getItem('api_key') || localStorage.getItem('yovole_token');
-        if (directKey) return directKey;
-        try {
-            const userInfo = JSON.parse(localStorage.getItem('user_info') || '{}') as { api_key?: string };
-            return userInfo.api_key || '';
-        } catch {
-            return '';
-        }
-    };
-
     const escapeJsString = (value: string) => value.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     const buildAgentQueryParam = () => {
         const agentId = buildAgentInitValue();
@@ -683,10 +672,6 @@ const isExpanded = ref(true);
     };
 
     const openIntegrationGuide = () => {
-        const storedKey = resolveStoredApiKey();
-        if (storedKey && !config.token) {
-            config.token = storedKey;
-        }
         showIntegrationGuide.value = true;
         void fetchIntegrationAgents();
     };
@@ -797,11 +782,6 @@ const handleMessage = (event: MessageEvent) => {
 
 onMounted(() => {
     window.addEventListener('message', handleMessage);
-    // Auto-load token from current user session
-    const storedKey = resolveStoredApiKey();
-    if (storedKey) {
-        config.token = storedKey;
-    }
     void fetchIntegrationAgents();
     connect();
 });

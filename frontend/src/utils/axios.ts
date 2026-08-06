@@ -23,19 +23,14 @@ instance.interceptors.request.use(
       delete config.headers['Content-Type']
     }
 
-    // 只有当请求头中不存在 API 凭据相关字段时，才自动从 localStorage 添加
+    // Browser portal authentication uses the HttpOnly session cookie.
+    // Explicit Authorization remains available for third-party Embed tokens.
     const hasAuth = config.headers['X-API-Key'] || config.headers['Authorization'];
     
     if (!hasAuth) {
-      // 1. 尝试读取 API Key (用于管理后台)
-      const apiKey = localStorage.getItem('api_key')
-      if (apiKey && config.headers) {
-        config.headers['X-API-Key'] = apiKey
-      }
-      
-      // 2. 尝试读取 JWT Token (用于 EmbedChat 集成模式)
+      // 尝试读取 JWT Token (用于 EmbedChat 集成模式)
       const token = localStorage.getItem('yovole_token') || localStorage.getItem('admin_token')
-      if (token && config.headers && !config.headers['X-API-Key']) {
+      if (token && config.headers) {
         config.headers['Authorization'] = `Bearer ${token}`
       }
     }
@@ -67,7 +62,6 @@ instance.interceptors.response.use(
             break;
           }
           // 未授权，清除本地存储并跳转登录
-          localStorage.removeItem('api_key')
           localStorage.removeItem('user_info')
           localStorage.removeItem('admin_token')
           localStorage.removeItem('yovole_token')

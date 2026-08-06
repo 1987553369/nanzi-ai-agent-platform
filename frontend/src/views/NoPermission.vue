@@ -53,8 +53,8 @@ const router = useRouter();
 const refreshing = ref(false);
 const errorMessage = ref('');
 
-const logout = () => {
-  localStorage.removeItem('api_key');
+const logout = async () => {
+  await axios.post('/api/portal/auth/logout').catch(() => undefined);
   localStorage.removeItem('user_info');
   router.push('/login');
 };
@@ -72,11 +72,6 @@ const refresh = async () => {
   refreshing.value = true;
   errorMessage.value = '';
   try {
-    const apiKey = localStorage.getItem('api_key');
-    if (!apiKey) {
-      logout();
-      return;
-    }
     const response = await axios.get('/api/portal/auth/me');
     if (response.data?.status === 'success' && response.data.data) {
       const userData = response.data.data;

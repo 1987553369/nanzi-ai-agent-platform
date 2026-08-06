@@ -1,5 +1,5 @@
 import sys
-from fastapi import FastAPI, HTTPException, Cookie, Depends, Request
+from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html, get_redoc_html
@@ -370,15 +370,20 @@ async def readiness_check():
 # --- Documentation Security ---
 
 async def get_current_user_from_cookie(
-    admin_token: Optional[str] = Cookie(None),
+    request: Request,
     db: AsyncSession = Depends(get_db_session)
 ):
     """Dependency to verify user access via Cookie for Docs (supports both admin and regular users)"""
-    if not admin_token:
+    from app.services.browser_session_service import BrowserSessionService
+
+    api_key = await BrowserSessionService.resolve_api_key(
+        request.cookies.get(BrowserSessionService.COOKIE_NAME)
+    )
+    if not api_key:
         # Redirect to login page if no token
         return None
-    
-    user = await AuthService.verify_api_key(admin_token, db)
+
+    user = await AuthService.verify_api_key(api_key, db)
     if not user:
         return None
         

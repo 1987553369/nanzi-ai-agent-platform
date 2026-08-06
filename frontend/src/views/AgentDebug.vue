@@ -491,8 +491,7 @@ const metadataMountableDatasets = ref<Array<{ id: string; name?: string; descrip
 const sessionMountedMetadataDatasetIds = ref<string[]>([]);
 
 const debugAuthHeaders = (): Record<string, string> | undefined => {
-  const key = localStorage.getItem("api_key");
-  return key ? { "X-API-Key": key } : undefined;
+  return undefined;
 };
 
 const finalizeConversationInBackground = (cid: string) => {
@@ -515,9 +514,7 @@ const generateNewConversation = (isManual = false) => {
 
 const loadSessionHistory = async (id: string) => {
   try {
-    const res = await axios.get(`/api/v1/chat/conversation/${id}`, {
-      headers: { 'X-API-Key': localStorage.getItem('api_key') }
-    });
+    const res = await axios.get(`/api/v1/chat/conversation/${id}`);
     if (res.data?.data && Array.isArray(res.data.data.messages)) {
       // Deduplicate: Filter out consecutive messages with same role and content
       const rawMessages = res.data.data.messages;
@@ -2969,7 +2966,6 @@ const sendMessage = async () => {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-API-Key": localStorage.getItem("api_key") || "",
       },
       body: JSON.stringify(requestBody),
       signal: abortController.signal,
@@ -3242,9 +3238,7 @@ const submitPendingExternalExecution = async (msg: Message) => {
       requestId: pending.external_execution_request_id,
       toolCall: pending.tool_call,
       output: pending.outputDraft || "(empty external result)",
-      headers: {
-        "X-API-Key": localStorage.getItem("api_key") || "",
-      },
+      headers: {},
       onEvent: (data) => applyPermissionStreamEvent(msg, data),
     });
   } catch (error: any) {
@@ -3400,7 +3394,6 @@ const confirmPendingPermission = async (msg: Message, confirmed: boolean) => {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-API-Key": localStorage.getItem("api_key") || "",
       },
       body: JSON.stringify({ confirmed }),
     });

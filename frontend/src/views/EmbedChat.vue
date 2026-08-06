@@ -5191,7 +5191,6 @@ const hasPermission = ref(true); // Default to true, strictly controlled by vali
 const syncValidatedCredentials = (apiKey: string) => {
   config.token = apiKey;
   localStorage.setItem("yovole_token", apiKey);
-  localStorage.setItem("api_key", apiKey);
   axios.defaults.headers.common["Authorization"] = `Bearer ${apiKey}`;
   axios.defaults.headers.common["X-API-Key"] = apiKey;
 };
@@ -5217,7 +5216,6 @@ const validateToken = async (): Promise<boolean> => {
     if (s && !candidates.includes(s)) candidates.push(s);
   };
   add(config.token);
-  add(localStorage.getItem("api_key"));
   add(localStorage.getItem("yovole_token"));
 
   const authHeaders = (token: string) => ({

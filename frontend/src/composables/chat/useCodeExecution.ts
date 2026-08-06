@@ -21,9 +21,7 @@ type CodeExecutionEvent = {
 
 const getAuthHeaders = (): Record<string, string> => {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  const apiKey = localStorage.getItem('api_key');
   const token = localStorage.getItem('yovole_token') || localStorage.getItem('admin_token');
-  if (apiKey) headers['X-API-Key'] = apiKey;
   if (token) headers.Authorization = `Bearer ${token}`;
   return headers;
 };

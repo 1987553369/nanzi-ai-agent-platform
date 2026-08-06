@@ -3,16 +3,10 @@ import { ApiReference } from '@scalar/api-reference'
 import '@scalar/api-reference/style.css'
 import { computed, ref, onMounted } from 'vue'
 
-const apiKey = ref(localStorage.getItem('api_key') || '')
 const specContent = ref<any>(null)
 const authError = ref(false)
 
 onMounted(async () => {
-  if (!apiKey.value) {
-    authError.value = true
-    return
-  }
-
   try {
     const response = await fetch('/openapi.json')
     if (!response.ok) throw new Error('Failed to fetch openapi.json')
@@ -41,18 +35,11 @@ const configuration = computed(() => ({
   spec: {
     content: specContent.value,
   },
-  authentication: {
-    preferredSecurityScheme: 'APIKeyHeader',
-    apiKey: {
-      token: apiKey.value
-    }
-  },
   theme: 'purple',
   hideDownloadButton: true
 } as const))
 
 const goToLogin = () => {
-  localStorage.removeItem('api_key')
   localStorage.removeItem('user_info')
   window.location.href = '/login'
 }

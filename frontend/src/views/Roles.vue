@@ -768,7 +768,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed, onUnmounted } from 'vue'
-import axios from 'axios'
+import axios from '../utils/axios'
 import { useToast } from '../composables/useToast'
 import { MENU_TREE } from '../constants/permissions'
 import QuotaPolicyPanel from '../components/admin/QuotaPolicyPanel.vue'
@@ -1057,10 +1057,8 @@ const fetchAllUsers = async () => {
     if (users.value.length > 0) return
     loadingUsers.value = true
     try {
-        const apiKey = localStorage.getItem('api_key')
         // Get all users (setting a large size to get most users for selection)
         const response = await axios.get('/api/portal/management/users', {
-            headers: { 'X-API-Key': apiKey },
             params: { page: 1, size: 1000 }
         })
         users.value = response.data.items || []
@@ -1074,10 +1072,7 @@ const fetchAllUsers = async () => {
 
 const fetchRoleUsers = async (roleId: number) => {
     try {
-        const apiKey = localStorage.getItem('api_key')
-        const response = await axios.get(`/api/portal/roles/${roleId}/users`, {
-            headers: { 'X-API-Key': apiKey }
-        })
+        const response = await axios.get(`/api/portal/roles/${roleId}/users`)
         assignedUserIds.value = response.data.user_ids || []
     } catch (e) {
         console.error('Fetch Role Users Failed', e)
@@ -1088,11 +1083,9 @@ const saveUserAssignments = async () => {
     if (!currentRole.value) return
     submittingUserAssignment.value = true
     try {
-        const apiKey = localStorage.getItem('api_key')
         await axios.post(
             `/api/portal/roles/${currentRole.value.id}/users`,
-            { user_ids: assignedUserIds.value },
-            { headers: { 'X-API-Key': apiKey } }
+            { user_ids: assignedUserIds.value }
         )
         showToast('用户分配保存成功', 'success')
         closeUserAssignmentDialog()
@@ -1132,12 +1125,10 @@ const isAllSelected = computed(() => {
 const fetchRoles = async () => {
     loading.value = true
     try {
-        const apiKey = localStorage.getItem('api_key')
         const params: any = { page: page.value, size: size.value }
         if (searchQuery.value) params.search = searchQuery.value
 
         const response = await axios.get('/api/portal/roles', {
-            headers: { 'X-API-Key': apiKey },
             params
         })
         roles.value = response.data.items
@@ -1190,12 +1181,11 @@ const saveRole = async () => {
     error.value = ''
 
     try {
-        const apiKey = localStorage.getItem('api_key')
         if (showEditDialog.value && editingRoleId.value) {
-            await axios.put(`/api/portal/roles/${editingRoleId.value}`, formData.value, { headers: { 'X-API-Key': apiKey } })
+            await axios.put(`/api/portal/roles/${editingRoleId.value}`, formData.value)
             showToast('更新成功', 'success')
         } else {
-            await axios.post('/api/portal/roles', formData.value, { headers: { 'X-API-Key': apiKey } })
+            await axios.post('/api/portal/roles', formData.value)
             showToast('创建成功', 'success')
         }
         closeDialogs()
@@ -1215,8 +1205,7 @@ const confirmDelete = (role: any) => {
 const deleteRole = async () => {
     if (!roleToDelete.value) return
     try {
-        const apiKey = localStorage.getItem('api_key')
-        await axios.delete(`/api/portal/roles/${roleToDelete.value.id}`, { headers: { 'X-API-Key': apiKey } })
+        await axios.delete(`/api/portal/roles/${roleToDelete.value.id}`)
         showToast('删除成功', 'success')
         showDeleteDialog.value = false
         fetchRoles()
@@ -1239,10 +1228,9 @@ const fetchResources = async () => {
     if (loadingResources.value) return
     loadingResources.value = true
     try {
-        const apiKey = localStorage.getItem('api_key')
         const results = await Promise.allSettled([
-            axios.get('/api/portal/ragflow/datasets', { headers: { 'X-API-Key': apiKey }, params: { page_size: 100 } }),
-            axios.get('/api/portal/management/resources/available', { headers: { 'X-API-Key': apiKey } })
+            axios.get('/api/portal/ragflow/datasets', { params: { page_size: 100 } }),
+            axios.get('/api/portal/management/resources/available')
         ])
 
          const handleResult = (result: PromiseSettledResult<any>) => result.status === 'fulfilled' ? result.value.data : null
@@ -1278,8 +1266,7 @@ const fetchResources = async () => {
 
 const fetchRolePermissions = async (roleId: number) => {
      try {
-        const apiKey = localStorage.getItem('api_key')
-        const response = await axios.get(`/api/portal/roles/${roleId}/permissions`, { headers: { 'X-API-Key': apiKey } })
+        const response = await axios.get(`/api/portal/roles/${roleId}/permissions`)
         const perms = response.data.permissions
         const missingIds = new Set(
             (allResources.value.datasets || [])
@@ -1317,7 +1304,6 @@ const savePermissions = async () => {
     if (!currentRole.value) return
     submittingPerms.value = true
     try {
-        const apiKey = localStorage.getItem('api_key')
         const missingIds = new Set(
             (allResources.value.datasets || [])
                 .filter((d: any) => d?.is_missing_in_ragflow || d?.status === 'missing')
@@ -1334,8 +1320,7 @@ const savePermissions = async () => {
         }
         await axios.put(
             `/api/portal/roles/${currentRole.value.id}/permissions`,
-            payload,
-            { headers: { 'X-API-Key': apiKey } }
+            payload
         )
         showToast('权限保存成功', 'success')
         closePermissionDialog()

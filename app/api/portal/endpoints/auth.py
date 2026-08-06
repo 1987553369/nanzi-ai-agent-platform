@@ -7,8 +7,32 @@ from app.core.orm import get_db_session
 from app.services.auth_service import AuthService
 from app.core.config import settings
 from app.core.rate_limit import enforce_rate_limit
+from app.services.browser_session_service import BrowserSessionService
 
 router = APIRouter()
+
+
+def _set_browser_session_cookie(response: Response, token: str) -> None:
+    response.set_cookie(
+        key=BrowserSessionService.COOKIE_NAME,
+        value=token,
+        httponly=True,
+        max_age=settings.BROWSER_SESSION_TTL_SECONDS,
+        samesite="lax",
+        secure=settings.API_SERVICE_ENV.strip().lower() in {"prod", "production"},
+        path="/",
+    )
+
+
+async def _create_browser_session_cookie(response: Response, api_key: str) -> None:
+    try:
+        session_token = await BrowserSessionService.create(
+            api_key,
+            settings.BROWSER_SESSION_TTL_SECONDS,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    _set_browser_session_cookie(response, session_token)
 
 class LoginRequest(BaseModel):
     api_key: Optional[str] = Field(None, description="API 密钥", json_schema_extra={"example": "S63B_..."})
@@ -53,14 +77,7 @@ async def sso_login(
         if not api_key:
              raise HTTPException(500, "User has no valid API Key for session")
 
-        response.set_cookie(
-            key="admin_token",
-            value=api_key,
-            httponly=True,
-            max_age=86400,
-            samesite="lax",
-            secure=False
-        )
+        await _create_browser_session_cookie(response, api_key)
 
         # 注册在线状态到 Redis
         await AuthService.register_online_state(api_key, user)
@@ -74,7 +91,6 @@ async def sso_login(
             "status": "success",
             "data": {
                 **user,
-                "api_key": api_key,
                 "permissions": perms_response.permissions.model_dump()
             }
         }
@@ -114,15 +130,7 @@ async def login(
                 detail="无效的 API Key"
             )
         api_key = request.api_key
-        # Set cookie for API Key login
-        response.set_cookie(
-            key="admin_token",
-            value=request.api_key,
-            httponly=True,
-            max_age=86400,
-            samesite="lax",
-            secure=False
-        )
+        await _create_browser_session_cookie(response, api_key)
 
     # 2. Password Login
     elif request.username and request.password:
@@ -143,14 +151,7 @@ async def login(
             if not api_key:
                  raise HTTPException(500, "User has no valid API Key for session")
 
-            response.set_cookie(
-                key="admin_token",
-                value=api_key,
-                httponly=True,
-                max_age=86400,
-                samesite="lax",
-                secure=False
-            )
+            await _create_browser_session_cookie(response, api_key)
             # 注册在线状态到 Redis
             await AuthService.register_online_state(api_key, user)
         elif result["status"] == "error_no_password":
@@ -179,7 +180,6 @@ async def login(
         "status": "success",
         "data": {
             **user,
-            "api_key": api_key,  # Include API Key for frontend storage
             "permissions": perms_response.permissions.model_dump()
         }
     }
@@ -215,6 +215,7 @@ async def change_password(
 
 @router.post("/logout", summary="退出登录")
 async def logout(
+    request: Request,
     response: Response,
     api_key: Optional[str] = Header(None, alias="X-API-Key")
 ):
@@ -223,8 +224,12 @@ async def logout(
     """
     if api_key:
         await AuthService.expire_api_key(api_key)
-        
-    response.delete_cookie(key="admin_token")
+
+    await BrowserSessionService.revoke(
+        request.cookies.get(BrowserSessionService.COOKIE_NAME)
+    )
+    response.delete_cookie(key=BrowserSessionService.COOKIE_NAME, path="/")
+    response.delete_cookie(key="admin_token", path="/")
     return {"status": "success", "message": "Logged out successfully"}
 
 

@@ -220,8 +220,9 @@ const handleLogin = async () => {
         const response = await axios.post(endpoint, payload)
         if (response.data?.status === 'success') {
           const userData = response.data.data
+          localStorage.removeItem('api_key')
+          localStorage.removeItem('admin_token')
           localStorage.setItem('user_info', JSON.stringify(userData))
-          localStorage.setItem('api_key', userData.api_key)
           
           // 普通业务用户进入个人工作台；管理员保留平台概览入口。
           if (userData.role !== 'admin') {

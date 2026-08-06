@@ -19,9 +19,13 @@ async def require_api_key(
         else:
             api_key = authorization
 
-    # Support Cookie (admin_token)
+    # Browser sessions are opaque; the long-lived API key remains server-side.
     if not api_key:
-        api_key = request.cookies.get("admin_token")
+        from app.services.browser_session_service import BrowserSessionService
+
+        api_key = await BrowserSessionService.resolve_api_key(
+            request.cookies.get(BrowserSessionService.COOKIE_NAME)
+        )
 
     if not api_key:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing API Key or Token")
@@ -132,4 +136,3 @@ async def verify_v1_api_access(
         )
 
     return user_info
-

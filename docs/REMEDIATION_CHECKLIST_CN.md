@@ -21,7 +21,7 @@
 
 | 状态 | 编号 | 修复项 | 验收条件 |
 |---|---|---|---|
-| [ ] | AUTH-P1-01 | 浏览器改用 HttpOnly/Secure/SameSite 短期 Session，停止 localStorage 长期 API Key | 登录、刷新、退出和撤销测试通过 |
+| [x] | AUTH-P1-01 | 浏览器改用 HttpOnly/Secure/SameSite 短期 Session，停止 localStorage 长期 API Key | 登录不返回长期 Key；随机 Session 可解析、撤销和过期；生产 Cookie 强制 Secure |
 | [x] | AUTH-P1-02 | SSO 强制 TLS 校验，删除 `verify=False` | 不可信证书连接失败 |
 | [x] | AUTH-P1-05 | CORS 默认同源，生产环境禁止通配 Origin 与凭据组合 | 未显式配置的跨域请求不返回 CORS 授权头 |
 | [~] | AUTH-P1-03 | 登录、LLM、工具、代码执行统一限流 | 登录、SSO、聊天生成、代码执行已接入 Redis 原子限流；独立工具执行入口待统一接入 |
@@ -84,4 +84,5 @@
 | 2026-08-06 | P0-E | 增加生产启动配置校验，拒绝 `CHANGE_ME_*`/`GENERATE_A_*` 占位安全参数 |
 | 2026-08-06 | P1-A | SSO 强制证书校验；CORS 改为显式 Origin 白名单，生产禁止通配符 |
 | 2026-08-06 | P1-B | 增加 Redis Lua 原子限流，覆盖登录、SSO、聊天生成和代码执行，并保留 `Retry-After` |
+| 2026-08-06 | P1-C | 浏览器登录改用 Redis 短期随机 Session，移除响应和 localStorage 中的长期 API Key |
 | 2026-08-06 | 验证 | 后端安全/运行时契约 48 项通过；前端安全/Embed/MCP 契约 19 项通过；全量前端构建仍被仓库既有 TypeScript 错误阻断 |

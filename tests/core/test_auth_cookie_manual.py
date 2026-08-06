@@ -29,7 +29,7 @@ async def test_require_api_key_cookie():
 # Since I don't have a full test DB setup fixture handy in this context, 
 # I will create a test that specifically mocks the dependency or AuthService to verify logic.
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock
 from app.services.auth_service import AuthService
 from app.core.dependencies import require_api_key
 from fastapi import Request, HTTPException
@@ -39,20 +39,27 @@ async def test_require_api_key_logic():
     # Mock request with cookie
     mock_request = MagicMock(spec=Request)
     mock_request.headers = {}
-    mock_request.cookies = {"admin_token": "valid_cookie_token"}
+    mock_request.cookies = {"nanzi_session": "opaque_session_token"}
     mock_request.state = MagicMock()
 
     # Mock DB
     mock_db = MagicMock()
 
     # Mock AuthService
-    with patch("app.services.auth_service.AuthService.verify_api_key", return_value={"user_id": 1}) as mock_verify:
+    with patch(
+        "app.services.browser_session_service.BrowserSessionService.resolve_api_key",
+        new=AsyncMock(return_value="resolved_api_key"),
+    ) as mock_resolve, patch(
+        "app.services.auth_service.AuthService.verify_api_key",
+        new=AsyncMock(return_value={"user_id": 1}),
+    ) as mock_verify:
         # Call dependency
         user = await require_api_key(mock_request, api_key_header=None, authorization=None, db=mock_db)
         
         # Assertions
         assert user.get("user_id") == 1
-        mock_verify.assert_called_with("valid_cookie_token", mock_db)
+        mock_resolve.assert_awaited_once_with("opaque_session_token")
+        mock_verify.assert_awaited_once_with("resolved_api_key", mock_db)
         
     # Mock request without cookie or header
     mock_request_empty = MagicMock(spec=Request)

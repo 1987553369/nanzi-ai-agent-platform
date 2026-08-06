@@ -1664,8 +1664,7 @@ const toggleAgentStatus = (agent: AIAgent) => {
 };
 
 const openPreview = (agent: AIAgent) => {
-  const token = localStorage.getItem("api_key") || "";
-  const url = `/embed/chat?token=${token}&agent_id=${agent.name || agent.id}&theme=light`;
+  const url = `/embed/chat?agent_id=${agent.name || agent.id}&theme=light`;
   window.open(url, "_blank");
 };
 
