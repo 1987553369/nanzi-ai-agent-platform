@@ -56,7 +56,9 @@ POST /api/v1/chat/completions
 - SSE 事件缺少正式版本、事件序号和可恢复协议。
 - 代码执行状态和部分取消状态保存在内存，无法跨副本协调。
 - 模型、工具和外部调用的超时、重试、熔断、脱敏和成本策略不统一。
-- Python 依赖大多只有最低版本，不能保证可重复构建。
+- Python 运行时依赖仍大多只有最低版本，尚不能保证完全可重复构建；测试、类型和 Ruff 已拆到
+  精确版本的 `requirements-dev.txt`，Node 使用 `package-lock.json`，下一步需要生成带 hash 的
+  Python Runtime/Dev/Optional lock。
 
 ## 改造建议
 

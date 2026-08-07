@@ -29,8 +29,8 @@
 | [x] | AUTH-P1-03 | 登录、LLM、工具、代码执行统一限流 | 登录、SSO、聊天生成、MCP 工具执行和代码执行均接入 Redis 原子限流 |
 | [~] | AUTH-P1-04 | Trace、Agent Active Config、上传文件统一对象授权 | Portal Trace/Span 和 Agent 活跃配置已校验所有者/执行权限；上传路径已按用户隔离，仍需浏览器跨用户负向集成测试 |
 | [x] | AI-P1-01 | Prompt Override、Raw Prompt、工具自动批准改为服务端特权 Capability | 普通请求无法弱化运行策略 |
-| [ ] | ENG-P1-01 | 固定 Python/Node 依赖，拆分 Runtime/Dev/Optional Lock | 干净环境可重复构建，生成 SBOM |
-| [~] | ENG-P1-02 | 建立 CI：Lint、类型、单测、集成、前端构建、SAST、Secret/依赖/镜像扫描 | 前端类型检查、生产构建和 317 项契约测试已通过；CI 编排与安全扫描仍待接入 |
+| [~] | ENG-P1-01 | 固定 Python/Node 依赖，拆分 Runtime/Dev/Optional Lock | Node 已有 lock；Python Runtime/Dev 已拆分，开发工具精确固定；Docker 基础镜像固定补丁版本并禁止 `npm install` 回退；仍需生成完整 Python hash lock、固定镜像 Digest 和拆 Optional 依赖 |
+| [~] | ENG-P1-02 | 建立 CI：Lint、类型、单测、集成、前端构建、SAST、Secret/依赖/镜像扫描 | 已新增四类 GitHub Actions job、增量 Ruff/SAST 硬门禁、离线测试、前端类型/构建、Secret Scan、依赖审计、双 SBOM、镜像构建/扫描和报告留存；待远端首次跑绿，并逐步把 Mypy/依赖/镜像存量报告转为阻断 |
 | [ ] | ENG-P1-03 | 统一前端 Auth Store、API Client、SSE Transport、错误模型 | Portal/Embed/Debug 共用协议契约 |
 | [ ] | ENG-P1-04 | 路由懒加载、Bundle Budget、长列表虚拟化 | 首屏体积和性能预算通过 |
 | [ ] | DB-P1-01 | 统一事务 Unit of Work，减少 Service 内部分散 Commit | 部分失败可完整回滚 |
@@ -117,3 +117,5 @@
 | 2026-08-07 | SEC-06B 验证 | 数据源凭据、迁移和静态安全契约 17 项通过；前端 `npm run build` 完整通过（10,386 个模块）；Python 3.11 定向编译和 `git diff --check` 通过。未执行真实数据库迁移、数据库连接或部署；真实迁移需先备份并执行 dry-run 审核 |
 | 2026-08-07 | NET-G（数据库 TLS） | 新增 `disabled/verify_ca/verify_identity` 策略和审批目录 CA 相对路径；连接池、即时测试、表发现、DDL 与长会话统一使用共享构建器；MySQL/ClickHouse/Oracle 仅宣称 CA 校验，PostgreSQL 支持 `verify-ca/verify-full`，SQL Server 保持系统信任库身份校验；Oracle Thick 使用 Wallet 目录；生产启动和运行时拒绝未启用 TLS；新增 MySQL V119/PostgreSQL V18 |
 | 2026-08-07 | NET-G 验证 | 离线 core 与迁移运行时回归 243 项、前端契约 320 项通过；`npm run build` 完整通过（10,386 个模块）；Python 3.11 定向编译和 `git diff --check` 通过。未执行真实数据库连接、迁移或部署；上线前需在隔离环境验证各驱动证书链、吊销和轮换 |
+| 2026-08-07 | ENG-E（CI 与供应链基线） | 新增 `Quality Gates`：后端全量编译、增量 Ruff/SAST、无基础设施测试、前端契约/类型/生产构建、Gitleaks、Pip/NPM 审计、CycloneDX 双 SBOM、Docker Buildx 和 Trivy SARIF；硬门禁与存量债务报告分离；所有 Action 使用精确版本并由 Dependabot 覆盖；Runtime/Dev Python 依赖拆分，Docker 固定 Node/Python 补丁版本并移除 `npm ci || npm install` 回退 |
+| 2026-08-07 | ENG-E 验证 | 离线 core/迁移回归 252 项、前端契约 320 项和 CI 专项 9 项通过；CI 配置自检、增量 Ruff/SAST、Python 全量编译、前端生产构建和 CycloneDX SBOM 本地通过。远端 GitHub Actions、完整 Python 3.11 干净依赖安装、镜像构建及扫描尚未运行，因此 ENG-P1-01/02 保持进行中 |

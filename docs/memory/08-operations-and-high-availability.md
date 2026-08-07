@@ -42,9 +42,13 @@
 - Compose 给应用配置 Redis 密码，但 Redis 服务没有匹配的 `requirepass`，也没有 Volume 和 Healthcheck。
 - 根 `env.example` 设置 `REDIS_DB=2`，而 RediSearch 要求 DB 0。
 - Compose 使用 `API_SERVICE_LOG_LEVEL`，应用读取 `LOG_LEVEL`，主程序又硬编码 INFO。
-- 基础镜像和 Redis 使用可变 Tag，Docker 构建允许从 `npm ci` 回退到 `npm install`。
+- Redis 和部分基础镜像仍使用可变 Tag；应用构建镜像已固定 Node/Python 补丁版本并删除
+  `npm ci` 失败后回退 `npm install` 的非确定路径，后续仍需固定镜像 Digest。
 - 运行镜像默认 root，并包含 Git、Node、浏览器和大量系统工具。
-- 没有 CI Workflow、Helm/Kubernetes、Prometheus、OpenTelemetry、SBOM、镜像签名和漏洞门禁。
+- 已新增 GitHub Actions `Quality Gates`，覆盖 Python 编译、增量 Ruff/SAST、无基础设施测试、
+  前端类型/构建、Secret Scan、依赖审计、CycloneDX SBOM、镜像构建与 Trivy 报告。Mypy、
+  依赖漏洞和镜像漏洞目前对存量只生成证据，待清零后转为阻断；仍缺 Helm/Kubernetes、
+  Prometheus、OpenTelemetry 和镜像签名。
 - 启动脚本先删除旧容器再启动新容器，存在明确停机窗口。
 
 ## 数据库迁移问题
@@ -109,3 +113,22 @@ Ingress / Load Balancer
 - 备份可在隔离环境恢复数据库、对象、状态和所需密钥版本。
 - 压测中 DB 连接、Redis 内存、队列、SSE 和 Worker 利用率低于规划预算的 70%。
 - 使用 Digest 固定的非 root 最小镜像，具备 Lock、SBOM、扫描和签名。
+
+## CI 与供应链门禁
+
+`.github/workflows/quality-gates.yml` 当前包含四类 job：
+
+- 后端：Python 3.11、全量 `compileall`、只检查新增代码行的 Ruff/SAST 棘轮、
+  `no_infrastructure` 测试；Mypy 存量输出为可下载报告。
+- 前端：`npm ci`、320 项静态契约、`vue-tsc` 和 Vite 生产构建。
+- 供应链：当前提交 Secret Scan、Pip/NPM 依赖审计和 Python/Frontend CycloneDX SBOM。
+- 容器：PR/main 构建 Docker 镜像并输出 High/Critical Trivy SARIF。
+
+Action 使用精确语义版本，Dependabot 覆盖 GitHub Actions、Pip、NPM 和 Docker。完整提交 SHA
+固定仍优于版本 Tag，后续在网络可用时应升级为 SHA，并把依赖/镜像漏洞从报告转为硬门禁。
+本地可先执行：
+
+```bash
+python scripts/ci/validate_ci_configuration.py
+python scripts/ci/python_quality_gate.py --base HEAD --head WORKTREE
+```

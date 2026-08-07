@@ -1,0 +1,239 @@
+name: Quality Gates
+
+on:
+  push:
+    branches:
+      - main
+      - "codex/**"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-gates-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.11"
+  NODE_VERSION: "20.19.4"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+jobs:
+  backend-quality:
+    name: Backend compile, incremental lint and offline tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      API_SERVICE_ENV: ci
+      DATABASE_TYPE: mysql
+      MYSQL_HOST: localhost
+      MYSQL_DB: nanzi_ci
+      MYSQL_USER: nanzi_ci
+      MYSQL_PASSWORD: ci-only-not-a-real-secret
+      REDIS_HOST: localhost
+      REDIS_ENABLE: "false"
+      ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      CI_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5.6.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install development dependencies
+        run: python -m pip install --requirement requirements-dev.txt
+
+      - name: Validate CI configuration
+        run: python scripts/ci/validate_ci_configuration.py
+
+      - name: Compile all Python sources
+        run: python -m compileall -q app scripts
+
+      - name: Reject new Ruff and SAST findings
+        run: >-
+          python scripts/ci/python_quality_gate.py
+          --base "${CI_BASE_SHA}"
+          --head "${GITHUB_SHA}"
+
+      - name: Run infrastructure-free backend tests
+        run: |
+          mkdir -p reports
+          python -m pytest -q -m no_infrastructure \
+            --ignore=tests/frontend \
+            --junitxml=reports/backend-junit.xml
+
+      - name: Capture current mypy debt
+        continue-on-error: true
+        run: |
+          mkdir -p reports
+          mypy app --ignore-missing-imports --follow-imports=skip --no-error-summary \
+            | tee reports/mypy-baseline.txt
+
+      - name: Upload backend reports
+        if: always()
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: backend-quality-reports
+          path: reports/
+          if-no-files-found: warn
+          retention-days: 14
+
+  frontend-quality:
+    name: Frontend contracts, types and production build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+
+      - name: Set up Node
+        uses: actions/setup-node@v4.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Set up Python
+        uses: actions/setup-python@v5.6.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Run frontend contract tests
+        run: |
+          mkdir -p reports
+          python -m pip install pytest==8.4.1
+          python -m pytest -q --confcutdir=tests/frontend tests/frontend \
+            --junitxml=reports/frontend-junit.xml
+
+      - name: Run strict type check and production build
+        working-directory: frontend
+        run: npm run build
+
+      - name: Upload frontend reports
+        if: always()
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: frontend-quality-reports
+          path: reports/
+          if-no-files-found: warn
+          retention-days: 14
+
+  supply-chain:
+    name: Secrets, dependency evidence and SBOM
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Scan committed secrets
+        uses: gitleaks/gitleaks-action@v2.3.9
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_COMMENTS: "false"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5.6.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Set up Node
+        uses: actions/setup-node@v4.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install audit and SBOM tools
+        run: python -m pip install pip-audit==2.9.0 cyclonedx-bom==7.1.0
+
+      - name: Generate Python dependency audit evidence
+        continue-on-error: true
+        run: |
+          mkdir -p reports
+          pip-audit --requirement requirements.txt --format json \
+            --output reports/pip-audit.json
+
+      - name: Generate frontend dependency audit evidence
+        continue-on-error: true
+        working-directory: frontend
+        run: |
+          npm audit --package-lock-only --audit-level=high --json \
+            > ../reports/npm-audit.json
+
+      - name: Generate CycloneDX SBOMs
+        run: |
+          cyclonedx-py requirements requirements.txt --output-format JSON \
+            --output-file reports/python-sbom.cdx.json
+          cd frontend
+          npm sbom --package-lock-only --sbom-format cyclonedx \
+            > ../reports/frontend-sbom.cdx.json
+
+      - name: Upload supply-chain evidence
+        if: always()
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: supply-chain-evidence
+          path: reports/
+          if-no-files-found: error
+          retention-days: 30
+
+  container-security:
+    name: Container build and vulnerability report
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3.11.1
+
+      - name: Build local scan image
+        uses: docker/build-push-action@v6.18.0
+        with:
+          context: .
+          file: docker/Dockerfile
+          load: true
+          push: false
+          tags: nanzi-ai-agent:ci-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Prepare container report directory
+        run: mkdir -p reports
+
+      - name: Scan image and write SARIF evidence
+        uses: aquasecurity/trivy-action@0.30.0
+        with:
+          image-ref: nanzi-ai-agent:ci-${{ github.sha }}
+          format: sarif
+          output: reports/trivy.sarif
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "0"
+
+      - name: Upload container report
+        if: always()
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: container-security-report
+          path: reports/trivy.sarif
+          if-no-files-found: error
+          retention-days: 30

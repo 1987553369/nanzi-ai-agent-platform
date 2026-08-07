@@ -2,13 +2,13 @@
 # PREBUILD_FRONTEND=1：宿主机已执行 vite build，仅 COPY dist（Mac 跨平台打 x86 包时推荐，避免容器 OOM）
 ARG PREBUILD_FRONTEND=0
 ARG APP_VERSION=dev
-FROM node:20-slim AS frontend-builder
+FROM node:20.19.4-bookworm-slim AS frontend-builder
 ARG PREBUILD_FRONTEND
 ARG APP_VERSION
 WORKDIR /app/frontend
 
 COPY frontend/package*.json ./
-RUN if [ "$PREBUILD_FRONTEND" != "1" ]; then npm ci || npm install; fi
+RUN if [ "$PREBUILD_FRONTEND" != "1" ]; then npm ci; fi
 
 COPY frontend/ .
 RUN if [ "$PREBUILD_FRONTEND" = "1" ]; then \
@@ -19,7 +19,7 @@ RUN if [ "$PREBUILD_FRONTEND" = "1" ]; then \
     fi
 
 # --- 阶段 2: Python 环境构建 ---
-FROM python:3.11-slim
+FROM python:3.11.13-slim-bookworm
 
 WORKDIR /app
 
@@ -68,7 +68,7 @@ COPY requirements.txt .
 
 # 安装 Python 依赖（使用 BuildKit 缓存挂载以加速重新构建时的依赖下载）
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --upgrade pip && \
+    pip install --upgrade pip==25.1.1 && \
     pip install -r requirements.txt
 
 # 安装 Playwright 浏览器内核及系统依赖（Chromium headless，约 260 MiB）

@@ -135,7 +135,7 @@ build_frontend_on_host() {
   fi
   (
     cd "$PROJECT_ROOT/frontend"
-    npm ci || npm install
+    npm ci
     NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=4096}" VITE_APP_VERSION="$VERSION" npx vite build
   )
   test -f "$PROJECT_ROOT/frontend/dist/index.html"
