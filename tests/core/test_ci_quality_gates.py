@@ -116,7 +116,15 @@ def test_runtime_and_development_dependencies_are_separated():
     runtime = (ROOT / "requirements.txt").read_text(encoding="utf-8")
     development = (ROOT / "requirements-dev.txt").read_text(encoding="utf-8")
 
-    for dependency in ("mypy", "Pillow", "pytest", "pytest-asyncio", "pytest-mock", "ruff"):
+    for dependency in (
+        "mypy",
+        "Pillow",
+        "pytest",
+        "pytest-asyncio",
+        "pytest-github-actions-annotate-failures",
+        "pytest-mock",
+        "ruff",
+    ):
         assert not re.search(rf"^{dependency}(?:[<=>\[]|$)", runtime, re.MULTILINE)
         assert re.search(rf"^{dependency}==", development, re.MULTILINE)
     assert development.startswith("-r requirements.txt")

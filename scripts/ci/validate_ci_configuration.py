@@ -63,7 +63,14 @@ def main() -> int:
     require("requirements-dev.txt" not in dockerfile, "生产镜像不得安装开发依赖")
 
     runtime_requirements = (ROOT / "requirements.txt").read_text(encoding="utf-8")
-    for dev_dependency in ("pytest", "pytest-asyncio", "pytest-mock", "mypy", "ruff"):
+    for dev_dependency in (
+        "pytest",
+        "pytest-asyncio",
+        "pytest-github-actions-annotate-failures",
+        "pytest-mock",
+        "mypy",
+        "ruff",
+    ):
         require(
             not re.search(rf"^{re.escape(dev_dependency)}(?:[<=>\[]|$)", runtime_requirements, re.MULTILINE),
             f"运行时依赖中仍包含开发工具: {dev_dependency}",
