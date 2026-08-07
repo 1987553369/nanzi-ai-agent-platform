@@ -34,9 +34,20 @@ const selectedConfigName = computed(() => {
   if (!selectedConfigId.value) return ''
   return savedConfigs.value.find((c) => c.id === selectedConfigId.value)?.name || ''
 })
+const selectedConfig = computed(() => {
+  if (!selectedConfigId.value) return null
+  return savedConfigs.value.find((c) => c.id === selectedConfigId.value) || null
+})
+const selectedCredentialUnavailable = computed(() => {
+  const status = selectedConfig.value?.credential_status
+  return status === 'migration_pending' || status === 'rotation_required'
+})
 
 const step1CanContinue = computed(() => {
-  return !!selectedConfigId.value && !!config.value.host && !!config.value.database
+  return !!selectedConfigId.value
+    && !!config.value.host
+    && !!config.value.database
+    && !selectedCredentialUnavailable.value
 })
 
 const step1ActionLabel = computed(() => {
@@ -63,7 +74,6 @@ const config = ref({
   host: '',
   port: 3306,
   user: '',
-  password: '',
   database: ''
 })
 
@@ -117,7 +127,6 @@ const applyDataSource = (c: DbConnectionConfig) => {
     host: c.host,
     port: c.port,
     user: c.db_user,
-    password: c.password,
     database: c.database_name,
   }
   testPassed.value = false
@@ -153,10 +162,11 @@ const enterLockedDataSourceFlow = async () => {
 
 // ─── 测试连接 ─────────────────────────────────────────────────────────────────
 const handleTestConnection = async () => {
+  if (!selectedConfigId.value) return
   testing.value = true
   connError.value = ''
   try {
-    await metadataApi.testDbConnection(config.value)
+    await metadataApi.testSavedDbConnection(selectedConfigId.value)
     testPassed.value = true
     showToast('连接测试成功', 'success')
   } catch (e: any) {
@@ -599,10 +609,11 @@ watch(importFilter, () => {
 })
 
 const handleNext = async () => {
+  if (!selectedConfigId.value) return
   loading.value = true
   connError.value = ''
   try {
-    const res = await metadataApi.listDbTables(config.value)
+    const res = await metadataApi.listSavedDbTables(selectedConfigId.value)
     tables.value = res.data.data
     selectedTables.value = selectedTables.value.filter((name) => !isTableImported(name))
     importFilter.value = hasDatasetContext.value && importedCountInRemote.value > 0 ? 'unimported' : 'all'
@@ -650,7 +661,11 @@ const handleConfirm = async () => {
       return
     }
 
-    const res = await metadataApi.getDbDdl(config.value, selectedTables.value)
+    if (!selectedConfigId.value) {
+      showToast('请先选择数据源', 'warning')
+      return
+    }
+    const res = await metadataApi.getSavedDbDdl(selectedConfigId.value, selectedTables.value)
     emit('confirm', {
       ddl: res.data.data,
       dataSourceName: selectedConfigName.value,
@@ -807,9 +822,17 @@ const dbTypeColor = (type: string) => {
                       v-else-if="selectedConfigId === c.id && connError"
                       class="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-red-50 text-red-600 border border-red-100"
                     >连接失败</span>
+                    <span
+                      v-if="c.credential_status === 'migration_pending' || c.credential_status === 'rotation_required'"
+                      class="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-100"
+                    >凭据已隔离</span>
                   </div>
                   <p class="text-[11px] text-gray-400 truncate font-mono mt-1">{{ c.host }}:{{ c.port }} / {{ c.database_name }}</p>
                   <p class="text-[11px] text-gray-400 truncate mt-1">用户：{{ c.db_user || '-' }}</p>
+                  <p
+                    v-if="c.credential_status === 'migration_pending' || c.credential_status === 'rotation_required'"
+                    class="mt-1 text-[11px] font-bold text-amber-700"
+                  >请到数据源管理重新录入密码后再导入</p>
                   <div v-if="c.description" class="mt-2 inline-flex max-w-full items-start gap-1.5 rounded-lg bg-amber-50 px-2 py-1 text-[11px] text-amber-800 border border-amber-100">
                     <svg class="w-3 h-3 mt-0.5 shrink-0 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h6m-6 4h4M5 4h14a1 1 0 011 1v14l-4-3H5a1 1 0 01-1-1V5a1 1 0 011-1z"/>

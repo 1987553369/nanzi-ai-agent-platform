@@ -16,12 +16,25 @@ class MetaDbConnectionConfig(Base):
     host          = Column(String(255), nullable=False, comment='主机地址')
     port          = Column(Integer, nullable=False, comment='端口号')
     db_user       = Column(String(100), nullable=False, comment='数据库用户名')
-    password      = Column(String(255), nullable=False, default='', comment='密码（明文）')
+    password      = Column(Text, nullable=True, comment='数据库密码版本化密文，不得保存明文')
+    password_status = Column(String(32), nullable=False, default='empty', comment='empty/encrypted/migration_pending/rotation_required')
+    password_migration_error = Column(String(500), nullable=True, comment='不含密码内容的迁移失败原因')
+    password_migrated_at = Column(DateTime, nullable=True, comment='密码完成加密或人工轮换的时间')
     database_name = Column(String(100), nullable=False, comment='数据库/库名')
     description   = Column(String(500), nullable=False, default='', comment='备注/用途说明')
     created_by    = Column(Integer, nullable=False, default=0, comment='创建者用户 ID')
     created_at    = Column(DateTime, default=datetime.now)
     updated_at    = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+    @property
+    def has_password(self) -> bool:
+        return bool(self.password)
+
+    @property
+    def credential_status(self) -> str:
+        from app.utils.database_credentials import resolve_database_credential_status
+
+        return resolve_database_credential_status(self.password, self.password_status)
 
 
 class DbProfileTask(Base):

@@ -12,7 +12,7 @@
 | 通用 API 工具 | 可配置外部 HTTP 请求 | `sys_api_tools` | 工具特定业务数据 | 已固定解析且禁止动态 Origin；继续限制任意 Header、响应字节和目标域审批 |
 | 企业 SSO | 配置的登录校验接口和固定用户目录接口 | `SSO_API_URL`、Token 和配置 | 登录身份/断言 | 已固定解析、强制 TLS、禁止代理/重定向并 Fail-closed；继续建设响应签名、防重放和审计 |
 | External SQL HTTP 网关 | `external_sql_api_url` | 系统 URL 和 `X-API-Key` | 只读 SQL、数据源和查询结果 | 已固定解析；私网要求专属精确 Host + CIDR 并绑定 Origin；继续限制响应字节、幂等重试和审计 |
-| 业务数据库 | MySQL/PostgreSQL/Oracle/ClickHouse/SQL Server | 当前为明文 `meta_db_connection_configs`（待迁移） | SQL、元数据、样本和结果 | 已固定解析；私网要求精确 Host + CIDR + 端口审批；SQL Server 强制证书校验；继续完成凭据密文迁移、其他驱动 CA/TLS、只读账号、查询预算和轮换 |
+| 业务数据库 | MySQL/PostgreSQL/Oracle/ClickHouse/SQL Server | `meta_db_connection_configs.password` 保存 `dbpassword:v1:` 密文；API 只返回状态 | SQL、元数据、样本和结果 | 已固定解析；私网要求精确 Host + CIDR + 端口审批；SQL Server 强制证书校验；存量明文由 V118/V17 隔离并通过默认 dry-run 的离线命令迁移；继续建设其他驱动 CA/TLS、只读账号、查询预算、KMS 和轮换演练 |
 | 通知/Webhook | 渠道特定 HTTP/SMTP 接口 | 用户/系统通知配置 | 任务、报表内容和身份 | HTTP 与 SMTP 均已固定解析；SMTP 私网要求专属 Host + CIDR、端口审批和强制 TLS；继续建设目标域名审批、数据分类、重试幂等和投递回执 |
 | 搜索/公开网页 | Bing、Baidu 或 URL Fetch | 工具配置 | 用户问题和网页 URL | 静态抓取已逐跳固定解析；动态浏览器任意 URL 已关闭，待隔离 Worker/egress 后恢复；继续限制内容大小/类型和 Prompt Injection |
 
@@ -25,6 +25,10 @@
 MCP 请求和响应 DTO 已分离，列表和详情只返回 `has_auth_headers`、
 `credential_status` 等无值标记；新写入使用版本化密文，存量明文通过隔离命令迁移，
 日志不再输出 Authorization 片段。后续仍需接入 KMS 密钥版本和轮换演练。
+
+外部数据源同样采用请求/响应分离：写请求可携带新密码，读响应仅返回 `has_password` 和
+`credential_status`。保存配置的测试、表列表和 DDL 接口只接受配置 ID，解密仅发生在服务端
+运行边界内；隔离或无法解密的凭据返回冲突并拒绝连接。
 
 ## 可用性契约
 

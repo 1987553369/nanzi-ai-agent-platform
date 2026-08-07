@@ -43,8 +43,10 @@
   受控私网目标要求集成专属精确 Host 与 CIDR 双重审批，存量模型/RAGFlow/OpenClaw Key 绑定
   Origin；SMTP 和数据库同时要求部署端口审批，SQL Server 已禁止信任任意证书。AgentScope SDK、
   MySQL/ClickHouse/Oracle CA/TLS 配置模型与生产 egress 仍需继续治理。
-- 外部数据源密码当前仍由 `meta_db_connection_configs.password` 明文保存，并由安全响应模型回传
-  前端；必须像 MCP 凭据一样增加版本化密文、存量隔离迁移和不回显状态字段。
+- 外部数据源密码已在 `SEC-06B` 改为 `dbpassword:v1:` 版本化密文。MySQL V118/PostgreSQL
+  V17 仅将存量明文标记为 `migration_pending`，运行时拒绝使用；离线命令默认 dry-run，审核后
+  才可逐行锁定并加密。API 响应只返回 `has_password`/`credential_status`，密码轮换后销毁旧连接池。
+  尚未执行真实数据库迁移，后续仍需接入 KMS 密钥版本并完成轮换和恢复演练。
 - SSO 已强制 HTTPS/TLS 证书校验、固定 DNS 解析并禁止环境代理和自动重定向；登录失败不再向
   未认证调用者回显底层连接异常。后续仍需补充服务端响应签名、防重放和真实不可信证书联调。
 - Cookie 固定 `secure=False`，长期 API Key 返回浏览器并保存在 `localStorage`。

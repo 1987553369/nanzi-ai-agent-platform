@@ -104,13 +104,7 @@ class DbProfileService:
                 .values(status=0, error_message=None)
             )
 
-        db_config = {
-            "host": config.host,
-            "port": config.port,
-            "user": config.db_user,
-            "password": config.password,
-            "database": config.database_name,
-        }
+        db_config = DbConnectionService.to_runtime_config(config)
 
         db_type = config.db_type.strip().lower()
         if db_type == "mysql":
@@ -677,13 +671,7 @@ class DbProfileService:
                 processed_count,
             )
 
-            db_config = {
-                "host": config.host,
-                "port": config.port,
-                "user": config.db_user,
-                "password": config.password,
-                "database": config.database_name,
-            }
+            db_config = DbConnectionService.to_runtime_config(config)
             db_type = config.db_type.strip().lower()
 
             from app.services.data_adapter.factory import get_adapter

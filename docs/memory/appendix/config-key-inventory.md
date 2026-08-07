@@ -58,6 +58,9 @@
 | `SSO_REQUEST_BUSINESS` | `str` | `'USER-LOGIN'` | `app/core/config.py:92` |
 | `SSO_TIMEOUT` | `int` | `30` | `app/core/config.py:93` |
 
+`ENCRYPTION_KEY` 同时用于 API Key、MCP 认证 Header 和外部数据源密码的版本化密文。
+运行迁移命令前必须确认当前密钥可解密已有密文；错误密钥会保持隔离状态，禁止回退为明文。
+
 ## 数据库存储的系统配置
 
 | 配置键 | 引用位置 |

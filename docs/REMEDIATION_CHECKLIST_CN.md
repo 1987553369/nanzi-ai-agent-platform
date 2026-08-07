@@ -16,6 +16,7 @@
 | [x] | AUTH-P0-01 | 删除固定管理员 API Key 和公共默认长期 Secret | 初始化 SQL、安装脚本、示例配置 | 安装随机生成一次性凭据；Secret Scan 无有效固定凭据 |
 | [x] | MCP-P0-01 | 阻止 MCP 凭据回显和日志泄露 | MCP DTO、Model、Client、前端表单 | 列表/详情仅返回配置状态；日志无 Header 值；新写入和存量凭据均使用版本化密文；明文运行时回退已禁用 |
 | [x] | NET-P0-01 | 建立统一 SSRF 防护并接入 MCP | URL Policy、MCP Client/Endpoint | 全量校验 A/AAAA；固定已验证 IP 连接并保留 Host/SNI；阻断私网、Loopback、Link-local、云元数据、跨 Origin 和重定向 |
+| [x] | SEC-06B | 外部数据源密码版本化加密、隔离迁移和 API 不回显 | 数据源 Model/Service/API、连接池、导入前端、MySQL V118、PostgreSQL V17 | 新写入立即加密；存量明文先隔离；运行时拒绝明文；响应仅返回 `has_password`/`credential_status`；轮换销毁旧池 |
 
 ## 二、P1 工程与安全稳定（P0 后 2-6 周）
 
@@ -52,7 +53,7 @@
 |---|---|---|
 | AUTH-P0-02 | 第三方跨域 Embed 仍需要短期、限受众 Embed Token 签发/撤销服务 | 新增 Token 表/签发接口、Origin/Agent 绑定、TTL、撤销和审计后再开放生产跨域嵌入 |
 | SEC-P0-02 | 代码执行当前只做了权限止血，执行进程仍在平台边界内 | 独立 Worker/Queue，非 root、只读根、无 Secret、网络/CPU/内存/PID/超时策略 |
-| NET-P0-02 | MCP、用户 HTTP 工具、公开网页抓取、Generic API、模型发现/Embedding、HTTP Webhook、SSO、RAGFlow、OpenClaw、External SQL HTTP 网关、SMTP 和用户配置的数据库原生协议已接入固定解析；受控私网目标要求精确 Host + CIDR 双重审批并限制端口。SMTP 强制 TLS；SQL Server 强制证书校验。动态浏览器任意 URL 已 fail-closed；AgentScope 模型 SDK、MySQL/ClickHouse/Oracle TLS 配置模型及生产网络层仍待治理 | 将 Host/CIDR/端口审批纳入部署变更和审计；继续完成数据库凭据加密和各驱动 CA/TLS 配置、Browser Worker、egress proxy/NetworkPolicy、响应字节上限和跨协议重绑定演练 |
+| NET-P0-02 | MCP、用户 HTTP 工具、公开网页抓取、Generic API、模型发现/Embedding、HTTP Webhook、SSO、RAGFlow、OpenClaw、External SQL HTTP 网关、SMTP 和用户配置的数据库原生协议已接入固定解析；受控私网目标要求精确 Host + CIDR 双重审批并限制端口。SMTP 强制 TLS；SQL Server 强制证书校验。动态浏览器任意 URL 已 fail-closed；AgentScope 模型 SDK、MySQL/ClickHouse/Oracle TLS 配置模型及生产网络层仍待治理 | 将 Host/CIDR/端口审批纳入部署变更和审计；继续完成各驱动 CA/TLS 配置、Browser Worker、egress proxy/NetworkPolicy、响应字节上限和跨协议重绑定演练 |
 
 ## 四、产品与平台完善（2-9 个月）
 
@@ -111,3 +112,5 @@
 | 2026-08-07 | NET-E 验证 | Python 3.9 离线 SMTP/配置安全契约 39 项通过，扩大后的出站/SSO 核心回归 92 项通过；Python 3.11 本批文件定向编译和 `git diff --check` 通过。Python 3.11 本机未安装 pytest，完整应用测试仍受缺少 `aiomysql`、`sqlglot` 等原生依赖影响，需标准 CI 回归；未连接真实 SMTP、数据库或启动部署 |
 | 2026-08-07 | NET-F（数据库原生协议） | MySQL、PostgreSQL、ClickHouse、Oracle、SQL Server 的连接池、即时连接、表发现、DDL 拉取和长会话统一接入部署侧 Host + CIDR + 端口审批；全量校验 A/AAAA 后驱动只连接固定 IP；PostgreSQL 使用原 Host + `hostaddr`；SQL Server 使用固定 IP 并强制 `Encrypt=yes`、`TrustServerCertificate=no`、原域名 `HostNameInCertificate`；ODBC 参数统一转义；客户端不再回显驱动底层异常 |
 | 2026-08-07 | NET-F 验证 | Python 3.9 数据库出站专项 102 项、扩大后的出站/SSO 核心回归 113 项通过；Python 3.11 本批文件定向编译和 `git diff --check` 通过。本机缺少 `aiomysql`、`asynch`、`oracledb`、`psycopg`、`aioodbc` 和 `sqlglot`，驱动 mock/集成测试需标准 CI 回归；未连接真实数据库或执行迁移。MySQL/ClickHouse/Oracle 的 CA/TLS 配置模型及数据库凭据加密另列后续高优先级批次 |
+| 2026-08-07 | SEC-06B（数据源凭据） | 新增 `dbpassword:v1:` 版本化密文和四态凭据状态；MySQL V118/PostgreSQL V17 只隔离存量明文；离线命令默认 dry-run、逐行锁定后加密；运行时拒绝明文和隔离凭据；API/前端不回显密码，保存配置按 ID 在服务端解密；密码轮换销毁旧连接池 |
+| 2026-08-07 | SEC-06B 验证 | 数据源凭据、迁移和静态安全契约 17 项通过；前端 `npm run build` 完整通过（10,386 个模块）；Python 3.11 定向编译和 `git diff --check` 通过。未执行真实数据库迁移、数据库连接或部署；真实迁移需先备份并执行 dry-run 审核 |

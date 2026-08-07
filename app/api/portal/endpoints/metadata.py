@@ -589,22 +589,61 @@ async def import_ddl(ddl: dict): # Expects {"ddl": "..."}
 from app.services.db_import_service import DBImportService
 from app.schemas.metadata import DBConnectionConfig, DDLRequest
 
+
+async def _test_database_connection(db_type: str, config_data: Dict[str, Any]) -> None:
+    if db_type == "mysql":
+        await DBImportService.test_mysql_connection(config_data)
+    elif db_type == "clickhouse":
+        await DBImportService.test_clickhouse_connection(config_data)
+    elif db_type == "oracle":
+        await DBImportService.test_oracle_connection(config_data)
+    elif db_type in DBImportService._sqlserver_type_aliases():
+        await DBImportService.test_sqlserver_connection(config_data)
+    elif db_type in DBImportService._postgresql_type_aliases():
+        await DBImportService.test_postgresql_connection(config_data)
+    else:
+        raise ValueError(f"不支持的数据库类型: {db_type}")
+
+
+async def _list_database_tables(
+    db_type: str,
+    config_data: Dict[str, Any],
+) -> List[Dict[str, str]]:
+    if db_type == "mysql":
+        return await DBImportService.get_mysql_tables(config_data)
+    if db_type == "clickhouse":
+        return await DBImportService.get_clickhouse_tables(config_data)
+    if db_type == "oracle":
+        return await DBImportService.get_oracle_tables(config_data)
+    if db_type in DBImportService._sqlserver_type_aliases():
+        return await DBImportService.get_sqlserver_tables(config_data)
+    if db_type in DBImportService._postgresql_type_aliases():
+        return await DBImportService.get_postgresql_tables(config_data)
+    raise ValueError(f"不支持的数据库类型: {db_type}")
+
+
+async def _get_database_ddl(
+    db_type: str,
+    config_data: Dict[str, Any],
+    tables: List[str],
+) -> str:
+    if db_type == "mysql":
+        return await DBImportService.get_mysql_ddl(config_data, tables)
+    if db_type == "clickhouse":
+        return await DBImportService.get_clickhouse_ddl(config_data, tables)
+    if db_type == "oracle":
+        return await DBImportService.get_oracle_ddl(config_data, tables)
+    if db_type in DBImportService._sqlserver_type_aliases():
+        return await DBImportService.get_sqlserver_ddl(config_data, tables)
+    if db_type in DBImportService._postgresql_type_aliases():
+        return await DBImportService.get_postgresql_ddl(config_data, tables)
+    raise ValueError(f"不支持的数据库类型: {db_type}")
+
 @router.post("/db/test-connection", dependencies=[Depends(require_permission("element", "element:metadata:import"))])
 async def test_db_connection(config: DBConnectionConfig):
     """测试外部数据库连接"""
     try:
-        if config.type == "mysql":
-            await DBImportService.test_mysql_connection(config.model_dump())
-        elif config.type == "clickhouse":
-            await DBImportService.test_clickhouse_connection(config.model_dump())
-        elif config.type == "oracle":
-            await DBImportService.test_oracle_connection(config.model_dump())
-        elif config.type in DBImportService._sqlserver_type_aliases():
-            await DBImportService.test_sqlserver_connection(config.model_dump())
-        elif config.type in DBImportService._postgresql_type_aliases():
-            await DBImportService.test_postgresql_connection(config.model_dump())
-        else:
-            raise HTTPException(status_code=400, detail=f"Unsupported DB type: {config.type}")
+        await _test_database_connection(config.type, config.model_dump())
         return {"code": 200, "message": "Connection successful"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -613,18 +652,7 @@ async def test_db_connection(config: DBConnectionConfig):
 async def list_db_tables(config: DBConnectionConfig):
     """获取外部数据库表列表"""
     try:
-        if config.type == "mysql":
-            tables = await DBImportService.get_mysql_tables(config.model_dump())
-        elif config.type == "clickhouse":
-            tables = await DBImportService.get_clickhouse_tables(config.model_dump())
-        elif config.type == "oracle":
-            tables = await DBImportService.get_oracle_tables(config.model_dump())
-        elif config.type in DBImportService._sqlserver_type_aliases():
-            tables = await DBImportService.get_sqlserver_tables(config.model_dump())
-        elif config.type in DBImportService._postgresql_type_aliases():
-            tables = await DBImportService.get_postgresql_tables(config.model_dump())
-        else:
-            raise HTTPException(status_code=400, detail=f"Unsupported DB type: {config.type}")
+        tables = await _list_database_tables(config.type, config.model_dump())
         return {"code": 200, "data": tables}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -634,18 +662,11 @@ async def get_db_ddl(request: DDLRequest):
     """获取指定表的 DDL"""
     try:
         config = request.config
-        if config.type == "mysql":
-            ddl = await DBImportService.get_mysql_ddl(config.model_dump(), request.tables)
-        elif config.type == "clickhouse":
-            ddl = await DBImportService.get_clickhouse_ddl(config.model_dump(), request.tables)
-        elif config.type == "oracle":
-            ddl = await DBImportService.get_oracle_ddl(config.model_dump(), request.tables)
-        elif config.type in DBImportService._sqlserver_type_aliases():
-            ddl = await DBImportService.get_sqlserver_ddl(config.model_dump(), request.tables)
-        elif config.type in DBImportService._postgresql_type_aliases():
-            ddl = await DBImportService.get_postgresql_ddl(config.model_dump(), request.tables)
-        else:
-            raise HTTPException(status_code=400, detail=f"Unsupported DB type: {config.type}")
+        ddl = await _get_database_ddl(
+            config.type,
+            config.model_dump(),
+            request.tables,
+        )
         return {"code": 200, "data": ddl}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -663,6 +684,24 @@ from app.schemas.db_connection import (
     ProfileImportPreviewRequest,
 )
 from app.services.db_connection_service import DbConnectionService
+
+
+class SavedDbDdlRequest(BaseModel):
+    tables: List[str]
+
+
+async def _saved_database_runtime_config(
+    conn: AsyncSession,
+    config_id: int,
+):
+    config = await DbConnectionService.get_config(conn, config_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="连接配置不存在")
+    try:
+        runtime_config = DbConnectionService.to_runtime_config(config)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    return config, runtime_config
 
 @router.get("/db/connection-configs", dependencies=[Depends(require_permission("element", "element:metadata:import"))])
 async def list_db_connection_configs(
@@ -708,6 +747,46 @@ async def update_db_connection_config(
     from app.services.pool_manager import DataSourcePoolManager
     await DataSourcePoolManager.invalidate_pool(config_id)
     return {"code": 200, "data": DbConnectionConfigSafeResponse.model_validate(config).model_dump()}
+
+
+@router.post("/db/connection-configs/{config_id}/test", dependencies=[Depends(require_permission("element", "element:metadata:import"))])
+async def test_saved_db_connection_config(
+    config_id: int,
+    conn: AsyncSession = Depends(get_db_session),
+):
+    config, runtime_config = await _saved_database_runtime_config(conn, config_id)
+    try:
+        await _test_database_connection(config.db_type, runtime_config)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"code": 200, "message": "Connection successful"}
+
+
+@router.get("/db/connection-configs/{config_id}/tables", dependencies=[Depends(require_permission("element", "element:metadata:import"))])
+async def list_saved_db_connection_tables(
+    config_id: int,
+    conn: AsyncSession = Depends(get_db_session),
+):
+    config, runtime_config = await _saved_database_runtime_config(conn, config_id)
+    try:
+        tables = await _list_database_tables(config.db_type, runtime_config)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"code": 200, "data": tables}
+
+
+@router.post("/db/connection-configs/{config_id}/ddl", dependencies=[Depends(require_permission("element", "element:metadata:import"))])
+async def get_saved_db_connection_ddl(
+    config_id: int,
+    payload: SavedDbDdlRequest,
+    conn: AsyncSession = Depends(get_db_session),
+):
+    config, runtime_config = await _saved_database_runtime_config(conn, config_id)
+    try:
+        ddl = await _get_database_ddl(config.db_type, runtime_config, payload.tables)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"code": 200, "data": ddl}
 
 
 @router.delete("/db/connection-configs/{config_id}", dependencies=[Depends(require_permission("element", "element:metadata:import"))])
@@ -908,4 +987,3 @@ async def toggle_table_profile_ignore(
     if not profile:
         raise HTTPException(status_code=404, detail="表画像不存在")
     return {"code": 200, "message": "修改成功", "data": {"is_ignored": profile.is_ignored}}
-

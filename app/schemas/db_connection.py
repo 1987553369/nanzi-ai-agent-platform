@@ -10,30 +10,22 @@ class DbConnectionConfigCreate(BaseModel):
     host: str
     port: int
     db_user: str
-    password: str
+    password: str = ""
+    clear_password: bool = False
     database_name: str
     description: str = ""
 
 
-class DbConnectionConfigResponse(DbConnectionConfigCreate):
-    """连接配置响应体（密码不回传）"""
-    id: int
-    created_by: int
-    created_at: datetime
-    updated_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-
 class DbConnectionConfigSafeResponse(BaseModel):
-    """前端用响应体，密码脱敏"""
+    """前端用响应体，只返回密码配置状态。"""
     id: int
     name: str
     db_type: str
     host: str
     port: int
     db_user: str
-    password: str  # 回传明文，供前端填充表单（历史连接一键填充）
+    has_password: bool
+    credential_status: str
     database_name: str
     description: str = ""
     created_by: int
@@ -130,4 +122,3 @@ class DbTableProfilePageResponse(BaseModel):
 
 class ProfileImportPreviewRequest(BaseModel):
     table_names: list[str] = Field(min_length=1)
-

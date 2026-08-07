@@ -84,7 +84,10 @@ Webhook 接入固定解析 Client；动态 URL 模板不得修改 Origin，模�
 保留原 Host 做 TLS 语义，SQL Server 强制证书验证。剩余出网治理：AgentScope 模型 SDK、
 MySQL/ClickHouse/Oracle CA/TLS 配置模型，以及响应字节上限、熔断/审计和生产 egress 策略。
 
-外部数据源密码仍为明文存储和前端回传，必须在后续凭据批次完成密文迁移与状态化响应。
+`SEC-06B` 已将外部数据源密码改为 `dbpassword:v1:` 版本化密文，并拆分写入与安全响应契约。
+列表和保存响应不再返回密码；前端通过保存配置 ID 请求连接测试、表列表和 DDL，由服务端短时
+解密。MySQL V118/PostgreSQL V17 只隔离存量明文，离线命令默认 dry-run 并逐行锁定迁移；
+`migration_pending`/`rotation_required` 在运行时 fail-closed，密码轮换会销毁旧连接池。
 
 ## 7. 工具治理目标
 

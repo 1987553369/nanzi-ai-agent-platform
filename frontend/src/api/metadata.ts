@@ -2,6 +2,12 @@ import axios from "../utils/axios";
 
 const API_BASE = "/api/portal/metadata";
 
+export type DbCredentialStatus =
+  | "empty"
+  | "encrypted"
+  | "migration_pending"
+  | "rotation_required";
+
 export interface DbConnectionConfig {
   id: number;
   name: string;
@@ -9,12 +15,25 @@ export interface DbConnectionConfig {
   host: string;
   port: number;
   db_user: string;
-  password: string;
+  has_password: boolean;
+  credential_status: DbCredentialStatus;
   database_name: string;
   description?: string;
   created_by: number;
   created_at: string;
   updated_at?: string;
+}
+
+export interface DbConnectionConfigPayload {
+  name: string;
+  db_type: string;
+  host: string;
+  port: number;
+  db_user: string;
+  password?: string;
+  clear_password?: boolean;
+  database_name: string;
+  description?: string;
 }
 
 export interface Dataset {
@@ -176,30 +195,20 @@ export const metadataApi = {
     axios.post(`${API_BASE}/db/tables`, config),
   getDbDdl: (config: any, tables: string[]) =>
     axios.post(`${API_BASE}/db/ddl`, { config, tables }),
+  testSavedDbConnection: (id: number) =>
+    axios.post(`${API_BASE}/db/connection-configs/${id}/test`),
+  listSavedDbTables: (id: number) =>
+    axios.get(`${API_BASE}/db/connection-configs/${id}/tables`),
+  getSavedDbDdl: (id: number, tables: string[]) =>
+    axios.post(`${API_BASE}/db/connection-configs/${id}/ddl`, { tables }),
 
   // DB Connection Configs
   listDbConnectionConfigs: () =>
     axios.get<{ code: number; data: DbConnectionConfig[] }>(`${API_BASE}/db/connection-configs`),
-  saveDbConnectionConfig: (data: {
-    name: string;
-    db_type: string;
-    host: string;
-    port: number;
-    db_user: string;
-    password: string;
-    database_name: string;
-    description?: string;
-  }) => axios.post(`${API_BASE}/db/connection-configs`, data),
-  updateDbConnectionConfig: (id: number, data: {
-    name: string;
-    db_type: string;
-    host: string;
-    port: number;
-    db_user: string;
-    password: string;
-    database_name: string;
-    description?: string;
-  }) => axios.put(`${API_BASE}/db/connection-configs/${id}`, data),
+  saveDbConnectionConfig: (data: DbConnectionConfigPayload) =>
+    axios.post(`${API_BASE}/db/connection-configs`, data),
+  updateDbConnectionConfig: (id: number, data: DbConnectionConfigPayload) =>
+    axios.put(`${API_BASE}/db/connection-configs/${id}`, data),
   deleteDbConnectionConfig: (id: number) =>
     axios.delete(`${API_BASE}/db/connection-configs/${id}`),
   debugDbConnectionSql: (id: number, sql: string, limit: number = 100, includeTotal = false) =>
@@ -250,4 +259,3 @@ export const metadataApi = {
   toggleDbTableProfileIgnore: (configId: number, tableName: string, isIgnored: number) =>
     axios.put<any>(`${API_BASE}/db/connection-configs/${configId}/table-profiles/ignore`, { table_name: tableName, is_ignored: isIgnored }),
 };
-

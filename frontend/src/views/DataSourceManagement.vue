@@ -22,6 +22,7 @@ const saving = ref(false)
 const deletingId = ref<number | null>(null)
 const testingConnectionId = ref<number | null>(null)
 const editingId = ref<number | null>(null)
+const editingOriginal = ref<DbConnectionConfig | null>(null)
 const deleteTarget = ref<DbConnectionConfig | null>(null)
 const testPassed = ref(false)
 const connError = ref('')
@@ -59,6 +60,25 @@ const filteredConfigs = computed(() => {
 })
 const dataSourcePrefix = computed(() => `${form.type}_`)
 const dataSourceName = computed(() => `${dataSourcePrefix.value}${form.nameSuffix.trim()}`)
+const savedCredentialUnavailable = computed(() => {
+  const status = editingOriginal.value?.credential_status
+  return status === 'migration_pending' || status === 'rotation_required'
+})
+const connectionTargetChanged = computed(() => {
+  const original = editingOriginal.value
+  if (!original) return false
+  return original.db_type !== form.type
+    || original.host !== form.host
+    || Number(original.port) !== Number(form.port)
+    || original.db_user !== form.user
+    || original.database_name !== form.database
+})
+const passwordPlaceholder = computed(() => {
+  if (!editingOriginal.value) return '请输入数据库密码'
+  if (savedCredentialUnavailable.value) return '历史凭据已隔离，请重新录入'
+  if (editingOriginal.value.has_password) return '已配置；留空保留原密码'
+  return '当前未配置密码；可留空'
+})
 
 const sanitizeNameSuffix = () => {
   form.nameSuffix = form.nameSuffix.replace(/[^a-zA-Z0-9_]/g, '')
@@ -100,15 +120,6 @@ const toConnectionPayload = () => ({
   database: form.database,
 })
 
-const configToConnectionPayload = (item: DbConnectionConfig) => ({
-  type: item.db_type,
-  host: item.host,
-  port: item.port,
-  user: item.db_user,
-  password: item.password,
-  database: item.database_name,
-})
-
 watch(
   () => [form.type, form.host, form.port, form.user, form.password, form.database],
   () => {
@@ -138,6 +149,7 @@ const openCreateForm = () => {
 
 const resetForm = () => {
   editingId.value = null
+  editingOriginal.value = null
   form.name = ''
   form.nameSuffix = ''
   form.type = 'mysql'
@@ -153,6 +165,7 @@ const resetForm = () => {
 
 const editConfig = (item: DbConnectionConfig) => {
   editingId.value = item.id
+  editingOriginal.value = item
   form.name = item.name
   const prefix = `${item.db_type}_`
   form.nameSuffix = item.name.startsWith(prefix) ? item.name.slice(prefix.length) : item.name
@@ -160,7 +173,7 @@ const editConfig = (item: DbConnectionConfig) => {
   form.host = item.host
   form.port = item.port
   form.user = item.db_user
-  form.password = item.password
+  form.password = ''
   form.database = item.database_name
   form.description = item.description || ''
   testPassed.value = false
@@ -182,6 +195,7 @@ const buildUniqueCopyName = (baseName: string) => {
 
 const copyConfig = (item: DbConnectionConfig) => {
   editingId.value = null
+  editingOriginal.value = null
   form.name = buildUniqueCopyName(item.name)
   const prefix = `${item.db_type}_`
   form.nameSuffix = form.name.startsWith(prefix) ? form.name.slice(prefix.length) : form.name
@@ -189,7 +203,7 @@ const copyConfig = (item: DbConnectionConfig) => {
   form.host = item.host
   form.port = item.port
   form.user = item.db_user
-  form.password = item.password
+  form.password = ''
   form.database = item.database_name
   const copyNote = `（复制自 ${item.name}）`
   const description = (item.description || '').trim()
@@ -199,7 +213,7 @@ const copyConfig = (item: DbConnectionConfig) => {
   testPassed.value = false
   connError.value = ''
   showFormModal.value = true
-  showToast('已复制配置到表单，请测试并保存', 'success')
+  showToast('已复制非敏感配置，请重新录入密码后测试并保存', 'success')
 }
 
 
@@ -221,10 +235,23 @@ const buildSuggestedName = () => {
 }
 
 const testConnection = async () => {
+  const original = editingOriginal.value
+  if (original && connectionTargetChanged.value && original.has_password && !form.password) {
+    connError.value = '连接目标已变化，请重新输入密码，禁止将旧凭据用于新目标'
+    showToast(connError.value, 'warning')
+    return
+  }
   testing.value = true
   connError.value = ''
   try {
-    await metadataApi.testDbConnection(toConnectionPayload())
+    if (original && !connectionTargetChanged.value && !form.password) {
+      if (savedCredentialUnavailable.value) {
+        throw new Error('历史凭据已隔离，请重新录入密码并保存后再测试')
+      }
+      await metadataApi.testSavedDbConnection(original.id)
+    } else {
+      await metadataApi.testDbConnection(toConnectionPayload())
+    }
     testPassed.value = true
     if (!form.nameSuffix.trim()) {
       form.nameSuffix = buildSuggestedName()
@@ -242,7 +269,7 @@ const testConnection = async () => {
 const testSavedConnection = async (item: DbConnectionConfig) => {
   testingConnectionId.value = item.id
   try {
-    await metadataApi.testDbConnection(configToConnectionPayload(item))
+    await metadataApi.testSavedDbConnection(item.id)
     showToast(`连接 ${item.name} 测试成功`, 'success')
   } catch (e: any) {
     showToast(e.response?.data?.detail || '连接测试失败', 'error')
@@ -258,6 +285,10 @@ const saveConfig = async () => {
   }
   if (!/^[a-zA-Z0-9_]+$/.test(form.nameSuffix.trim())) {
     showToast('数据源名称仅支持英文、数字与下划线以确保兼容物理匹配', 'warning')
+    return
+  }
+  if (editingOriginal.value && connectionTargetChanged.value && editingOriginal.value.has_password && !form.password) {
+    showToast('连接目标已变化，请重新输入密码并测试', 'warning')
     return
   }
   saving.value = true
@@ -660,7 +691,10 @@ onUnmounted(() => {
               </div>
               <div>
                 <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">密码 (Password)</label>
-                <input v-model="form.password" type="password" class="w-full border border-gray-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm" placeholder="******">
+                <input v-model="form.password" type="password" class="w-full border border-gray-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm" :placeholder="passwordPlaceholder">
+                <p v-if="savedCredentialUnavailable && !form.password" class="mt-1 text-[11px] text-amber-600">
+                  历史凭据不可用，必须重新录入密码才能恢复连接。
+                </p>
               </div>
             </div>
 
@@ -777,6 +811,12 @@ onUnmounted(() => {
                 </div>
                 <p class="text-xs font-mono text-gray-500 truncate">{{ item.host }}:{{ item.port }} / {{ item.database_name }}</p>
                 <p class="text-xs text-gray-400 mt-1">用户：{{ item.db_user }}</p>
+                <p
+                  v-if="item.credential_status === 'migration_pending' || item.credential_status === 'rotation_required'"
+                  class="mt-1 text-xs font-bold text-amber-600"
+                >
+                  凭据已隔离，请编辑并重新录入密码
+                </p>
                 
                 <div class="flex items-center gap-2 flex-wrap mt-2">
                   <!-- 用途备注 -->

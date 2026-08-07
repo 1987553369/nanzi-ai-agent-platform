@@ -87,11 +87,14 @@ class DataSourcePoolManager:
     @staticmethod
     def _get_config_fingerprint(db_config: Any) -> str:
         """根据数据源配置参数生成唯一的哈希指纹，用于配置变更对比"""
+        from app.services.db_connection_service import DbConnectionService
+
+        password = DbConnectionService.get_runtime_password(db_config)
         raw_str = (
             f"{db_config.db_type}:{db_config.host}:{db_config.port}:"
-            f"{db_config.db_user}:{db_config.password}:{db_config.database_name}"
+            f"{db_config.db_user}:{password}:{db_config.database_name}"
         )
-        return hashlib.md5(raw_str.encode("utf-8")).hexdigest()
+        return hashlib.sha256(raw_str.encode("utf-8")).hexdigest()
 
     @classmethod
     async def get_pool(cls, source_id: int) -> Any:
@@ -147,14 +150,16 @@ class DataSourcePoolManager:
         """创建 MySQL 连接池"""
         import aiomysql
         from app.utils.database_outbound import resolve_database_target
+        from app.services.db_connection_service import DbConnectionService
 
         target = await resolve_database_target(db_config.host, int(db_config.port))
+        password = DbConnectionService.get_runtime_password(db_config)
         pool = await aiomysql.create_pool(
             host=target.connect_address,
             port=target.port,
             db=db_config.database_name,
             user=db_config.db_user,
-            password=db_config.password,
+            password=password,
             minsize=1,
             maxsize=50,  # 适度控制单进程池大小以防止多 worker 爆表
             autocommit=False
@@ -166,14 +171,16 @@ class DataSourcePoolManager:
         """创建 ClickHouse 连接池"""
         from asynch.pool import Pool as AsynchPool
         from app.utils.database_outbound import resolve_database_target
+        from app.services.db_connection_service import DbConnectionService
 
         target = await resolve_database_target(db_config.host, int(db_config.port))
+        password = DbConnectionService.get_runtime_password(db_config)
         pool = AsynchPool(
             host=target.connect_address,
             port=target.port,
             database=db_config.database_name or "default",
             user=db_config.db_user or "default",
-            password=db_config.password or "",
+            password=password,
             minsize=1,
             maxsize=50,
             encoding_errors="replace"
@@ -186,8 +193,10 @@ class DataSourcePoolManager:
         import aioodbc
         from app.services.data_adapter.sqlserver import build_sqlserver_odbc_dsn
         from app.utils.database_outbound import resolve_database_target
+        from app.services.db_connection_service import DbConnectionService
 
         target = await resolve_database_target(db_config.host, int(db_config.port))
+        password = DbConnectionService.get_runtime_password(db_config)
 
         dsn = build_sqlserver_odbc_dsn(
             {
@@ -195,7 +204,7 @@ class DataSourcePoolManager:
                 "port": db_config.port,
                 "database": db_config.database_name,
                 "user": db_config.db_user,
-                "password": db_config.password,
+                "password": password,
             },
             connect_address=target.connect_address,
             certificate_hostname=target.hostname,
@@ -214,8 +223,10 @@ class DataSourcePoolManager:
         from psycopg_pool import AsyncConnectionPool
         from app.services.data_adapter.postgresql import build_postgresql_conninfo
         from app.utils.database_outbound import resolve_database_target
+        from app.services.db_connection_service import DbConnectionService
 
         target = await resolve_database_target(db_config.host, int(db_config.port))
+        password = DbConnectionService.get_runtime_password(db_config)
 
         async def configure_connection(connection: Any) -> None:
             """让未带 schema 的表名也能解析到用户业务 schema。"""
@@ -242,7 +253,7 @@ class DataSourcePoolManager:
                 "port": db_config.port,
                 "database": db_config.database_name,
                 "user": db_config.db_user,
-                "password": db_config.password,
+                "password": password,
             },
             connect_address=target.connect_address,
         )
@@ -261,8 +272,10 @@ class DataSourcePoolManager:
         """创建 Oracle 连接池"""
         import oracledb
         from app.utils.database_outbound import resolve_database_target
+        from app.services.db_connection_service import DbConnectionService
 
         target = await resolve_database_target(db_config.host, int(db_config.port))
+        password = DbConnectionService.get_runtime_password(db_config)
         
         # 组装 DSN：由于智能体平台没有 extra_params，我们将 database_name 默认作为 SID 构建。
         # 如果用户名/密码/端口配置正确，可以直接通过 SID 连接。
@@ -283,7 +296,7 @@ class DataSourcePoolManager:
             init_oracle_thick_mode()
             pool = oracledb.create_pool(
                 user=db_config.db_user,
-                password=db_config.password,
+                password=password,
                 dsn=dsn,
                 min=1,
                 max=20,
@@ -294,7 +307,7 @@ class DataSourcePoolManager:
             logger.info("[Pool Manager] 正在创建 Oracle Thin Mode 连接池 (异步连接池)")
             pool = await oracledb.create_pool_async(
                 user=db_config.db_user,
-                password=db_config.password,
+                password=password,
                 dsn=dsn,
                 min=1,
                 max=20,

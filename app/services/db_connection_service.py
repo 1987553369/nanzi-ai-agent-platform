@@ -1,8 +1,15 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 from typing import List, Optional
+from datetime import datetime
 
 from app.models.db_connection import MetaDbConnectionConfig
+from app.utils.database_credentials import (
+    DATABASE_CREDENTIAL_STATUS_EMPTY,
+    DATABASE_CREDENTIAL_STATUS_ENCRYPTED,
+    decrypt_database_password,
+    encrypt_database_password,
+)
 
 
 class DbConnectionService:
@@ -43,13 +50,21 @@ class DbConnectionService:
         if existing:
             raise ValueError("数据源名称已存在")
 
+        encrypted_password = encrypt_database_password(data.get("password"))
         config = MetaDbConnectionConfig(
             name=data["name"],
             db_type=data["db_type"],
             host=data["host"],
             port=data["port"],
             db_user=data["db_user"],
-            password=data["password"],
+            password=encrypted_password,
+            password_status=(
+                DATABASE_CREDENTIAL_STATUS_ENCRYPTED
+                if encrypted_password
+                else DATABASE_CREDENTIAL_STATUS_EMPTY
+            ),
+            password_migration_error=None,
+            password_migrated_at=datetime.now(),
             database_name=data["database_name"],
             description=data.get("description", ""),
             created_by=user_id,
@@ -79,7 +94,17 @@ class DbConnectionService:
         config.host = data["host"]
         config.port = data["port"]
         config.db_user = data["db_user"]
-        config.password = data["password"]
+        password = data.get("password")
+        if data.get("clear_password"):
+            config.password = None
+            config.password_status = DATABASE_CREDENTIAL_STATUS_EMPTY
+            config.password_migration_error = None
+            config.password_migrated_at = datetime.now()
+        elif password is not None and password != "":
+            config.password = encrypt_database_password(password)
+            config.password_status = DATABASE_CREDENTIAL_STATUS_ENCRYPTED
+            config.password_migration_error = None
+            config.password_migrated_at = datetime.now()
         config.database_name = data["database_name"]
         config.description = data.get("description", "")
 
@@ -95,3 +120,20 @@ class DbConnectionService:
         )
         await conn.commit()
         return result.rowcount > 0
+
+    @staticmethod
+    def get_runtime_password(config: MetaDbConnectionConfig) -> str:
+        return decrypt_database_password(
+            config.password,
+            getattr(config, "password_status", None),
+        )
+
+    @staticmethod
+    def to_runtime_config(config: MetaDbConnectionConfig) -> dict:
+        return {
+            "host": config.host,
+            "port": config.port,
+            "user": config.db_user,
+            "password": DbConnectionService.get_runtime_password(config),
+            "database": config.database_name,
+        }
