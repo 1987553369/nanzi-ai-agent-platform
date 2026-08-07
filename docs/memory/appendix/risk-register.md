@@ -11,7 +11,7 @@
 | SEC-06 | P1（公网 HTTP 路径已缓解） | MCP 和其他可配置 URL 存在 SSRF | MCP、用户 HTTP 工具、Generic API、模型发现/Embedding、网页抓取和 HTTP Webhook 已固定解析；继续覆盖管理员内网集成、模型 SDK、SMTP、Browser Worker 和网络层 egress | Redirect、Rebinding、IPv4/IPv6/元数据、跨 Origin 与跨协议测试 |
 | SEC-06A | P1（已缓解） | 历史 MCP 凭据被回显、明文保存和写入日志 | 已完成 DTO 分离、版本化密文、存量隔离迁移和日志脱敏；继续建设 KMS 轮换 | API/状态机契约、双数据库迁移清单、日志脱敏检查 |
 | SEC-07 | P1 | 浏览器长期 API Key、localStorage 和不安全 Cookie/CORS | 安全会话 Cookie、CSRF、精确 Origin | 浏览器安全和会话轮换测试 |
-| SEC-08 | P1 | SSO 关闭 TLS 校验 | 强制证书验证和可信 CA | 无效/不可信证书集成测试 |
+| SEC-08 | P1（已缓解） | SSO 历史上关闭 TLS 校验且用户目录调用阻塞事件循环 | 已强制 HTTPS/TLS 与固定解析、禁用代理/重定向、异步化目录同步并稳定错误映射；继续建设响应签名和防重放 | 固定解析契约、离线目录单测；待无效/不可信证书集成测试 |
 | SEC-09 | P1 | Trace 和 Agent active config 缺少统一对象授权 | Owner/Admin/资源授权统一层 | 跨用户 Trace/配置负向测试 |
 | SEC-10 | P1 | 客户端 Prompt Override/工具自动批准可弱化策略 | 服务端特权 Capability 模型 | 普通用户 Override 拒绝测试 |
 | OPS-01 | P0 | 每个 API 副本都启动 Scheduler 和后台任务 | 拆分 Scheduler/Worker，持久化幂等执行 | 双副本同计划时间单次执行测试 |

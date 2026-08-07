@@ -10,7 +10,7 @@
 | OpenClaw | `/v1/chat/completions` | 系统/Agent Base URL 和 Key | 用户认证上下文、数据集范围和消息 | 上下文签名、精确 Audience、出网白名单和响应校验 |
 | MCP Server | 用户/管理员配置的 SSE/JSON-RPC URL | `sys_mcp_servers` 和 Auth Header | 工具发现、调用参数和业务数据 | 已接入固定解析与同源限制；继续建设 egress、Secret Vault、审批、幂等和审计 |
 | 通用 API 工具 | 可配置外部 HTTP 请求 | `sys_api_tools` | 工具特定业务数据 | 已固定解析且禁止动态 Origin；继续限制任意 Header、响应字节和目标域审批 |
-| 企业 SSO | 配置的登录校验接口 | `SSO_API_URL`、Token 和配置 | 登录身份/断言 | TLS、签名响应、防重放、超时、Fail-closed 和审计 |
+| 企业 SSO | 配置的登录校验接口和固定用户目录接口 | `SSO_API_URL`、Token 和配置 | 登录身份/断言 | 已固定解析、强制 TLS、禁止代理/重定向并 Fail-closed；继续建设响应签名、防重放和审计 |
 | 业务数据库 | MySQL/PostgreSQL/Oracle/ClickHouse/SQL Server | 加密的 `meta_db_connection_configs` | SQL、元数据、样本和结果 | 网络白名单、只读账号、查询预算、脱敏、连接池和凭据轮换 |
 | 通知/Webhook | 渠道特定 HTTP 接口 | 用户/系统通知配置 | 任务、报表内容和身份 | HTTP Webhook 已固定解析；继续建设域名审批、SMTP 安全、数据分类、重试幂等和投递回执 |
 | 搜索/公开网页 | Bing、Baidu 或 URL Fetch | 工具配置 | 用户问题和网页 URL | 静态抓取已逐跳固定解析；动态浏览器任意 URL 已关闭，待隔离 Worker/egress 后恢复；继续限制内容大小/类型和 Prompt Injection |

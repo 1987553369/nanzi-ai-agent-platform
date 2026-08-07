@@ -31,7 +31,7 @@
 | 用户 API Key | 随机值；SHA-256 hash 查询；Fernet 可逆存储 | 长期凭据同时被当作浏览器会话；可逆副本扩大密钥泄露面 |
 | Cookie `admin_token` | 内容仍是 API Key | 登录时 `secure=False`，不是独立短期 session |
 | localStorage | `api_key`、`user_info` | XSS 可直接读取长期 API Key |
-| SSO | 用户名/密码换取外部 token | HTTP client `verify=False`，存在中间人风险 |
+| SSO | 用户名/密码换取外部 token | 已强制 HTTPS/TLS 与固定解析；仍缺响应签名和防重放验证 |
 
 API Key 的高熵生成和 hash 查询是已有优点，见 `app/utils/encryption.py:32-52`。用户禁用、角色变更会使认证/权限缓存失效，见 `auth_service.py:251-284` 和 `management.py:520-583`。
 
@@ -53,7 +53,8 @@ API Key 的高熵生成和 hash 查询是已有优点，见 `app/utils/encryptio
 
 - 浏览器登录响应返回完整长期 API Key，前端写入 localStorage；Cookie 固定 `secure=False`。证据：`auth.py:99-165`、`Login.vue:223-224`。
 - 登出只删除 Redis 缓存，数据库 API Key 仍可立即重新认证。证据：`auth_service.py:242-249`。
-- SSO 禁用 TLS 校验。证据：`auth_service.py:354-386`、`sso_user.py:30-31`。
+- SSO 历史上曾禁用 TLS 校验；现已强制 HTTPS/TLS、固定解析、禁用环境代理/重定向，并将
+  用户目录同步改为非阻塞异步调用。剩余风险是响应签名、防重放与真实证书失败联调。
 - `/chat` 的 V1 白名单规则过宽，连带放行代码执行等子路由。证据：`v1_api_access.py:110-115`。
 - Portal 审计 trace 只按 `trace_id` 查询，没有 owner/admin 校验。证据：`audit.py:194-269`。
 - Agent active config 对任意登录用户返回 system prompt、tools、skills 和可能含密钥的 `engine_config`。证据：`agents.py:203-228`、`agent_manager.py:351-438`。

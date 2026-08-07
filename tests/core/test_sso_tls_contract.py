@@ -12,7 +12,7 @@ def _source(path: str) -> str:
     return (ROOT / path).read_text(encoding="utf-8")
 
 
-def test_sso_clients_never_disable_tls_certificate_verification():
+def test_sso_clients_use_pinned_outbound_transport():
     sources = "\n".join(
         _source(path)
         for path in (
@@ -22,7 +22,10 @@ def test_sso_clients_never_disable_tls_certificate_verification():
     )
 
     assert "verify=False" not in sources
-    assert sources.count("verify=True") >= 2
+    assert "httpx.AsyncClient(" not in sources
+    assert "requests.post(" not in sources
+    assert sources.count("create_ssrf_safe_async_client") >= 4
+    assert sources.count("allowed_url=") >= 2
 
 
 def test_cors_middleware_uses_explicit_configured_origins():

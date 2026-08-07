@@ -59,7 +59,7 @@ async def get_sso_users(
         )
     try:
         # 1. Get all users from SSO
-        sso_users = LaplacePortalApiClient.get_all_users()
+        sso_users = await LaplacePortalApiClient.get_all_users()
         
         # 2. Get all existing usernames from local DB
         stmt = select(User.user_name)
@@ -99,7 +99,7 @@ async def sync_sso_users(
         
     try:
         # 1. Get SSO data to fetch real names/emails
-        sso_users = LaplacePortalApiClient.get_all_users()
+        sso_users = await LaplacePortalApiClient.get_all_users()
         sso_map = {u["code"]: u for u in sso_users}
         
         # 2. Filter out already existing users

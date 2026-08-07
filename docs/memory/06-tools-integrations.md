@@ -74,7 +74,8 @@ Webhook 接入固定解析 Client；动态 URL 模板不得修改 Origin，模�
 跨 Origin 重定向剥离认证 Header，日志不记录查询值和参数值。固定本机 Ollama
 `localhost:11434` 是代码限定的唯一私网例外。
 
-剩余出网治理：RAGFlow、OpenClaw、External SQL、SSO、AgentScope 模型 SDK 和 SMTP；这些路径
+`NET-C` 已将 SSO 登录和管理员用户目录同步接入固定解析并做稳定错误映射。
+剩余出网治理：RAGFlow、OpenClaw、External SQL、AgentScope 模型 SDK 和 SMTP；这些路径
 需要显式内网 Host/网段审批、凭据 Audience、响应字节上限、熔断/审计以及生产 egress 策略。
 
 ## 7. 工具治理目标

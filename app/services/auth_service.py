@@ -10,6 +10,7 @@ from app.core.orm import AsyncSessionLocal
 from app.core.config import get_settings
 from app.models.user import User
 from app.utils.encryption import get_api_key_manager
+from app.utils.outbound_url_policy import create_ssrf_safe_async_client
 from passlib.context import CryptContext
 
 logger = logging.getLogger(__name__)
@@ -371,7 +372,10 @@ class AuthService:
         }
 
         try:
-            async with httpx.AsyncClient(timeout=settings.SSO_TIMEOUT, verify=True) as client:
+            async with create_ssrf_safe_async_client(
+                allowed_url=settings.SSO_API_URL,
+                timeout=settings.SSO_TIMEOUT,
+            ) as client:
                 response = await client.post(settings.SSO_API_URL, headers=headers, json=api_request)
                 if response.status_code != 200:
                     return {"status": "fail", "message": f"SSO 服务响应异常: {response.status_code}"}
@@ -379,10 +383,18 @@ class AuthService:
                 resp_data = response.json()
                 if not resp_data.get('data'):
                     return {"status": "fail", "message": "SSO 认证失败: 用户名或密码错误"}
-        except httpx.RequestError as e:
-            return {"status": "fail", "message": f"连接 SSO 服务失败: {str(e)}"}
-        except Exception as e:
-            return {"status": "fail", "message": f"SSO 认证过程发生错误: {str(e)}"}
+        except httpx.RequestError as exc:
+            logger.warning(
+                "SSO authentication transport failed: %s",
+                type(exc).__name__,
+            )
+            return {"status": "fail", "message": "SSO 认证服务暂时不可用"}
+        except Exception as exc:
+            logger.error(
+                "SSO authentication failed before identity verification: %s",
+                type(exc).__name__,
+            )
+            return {"status": "fail", "message": "SSO 认证服务暂时不可用"}
 
         # 2. 认证通过后，查询本地数据库映射权限
         session, is_local = await AuthService._get_session(db)
