@@ -84,7 +84,20 @@ class TraceSpanContext:
 
         # 出栈：恢复父级 Span ID
         if self._token:
-            current_span_var.reset(self._token)
+            try:
+                current_span_var.reset(self._token)
+            except ValueError:
+                # Async generators can be advanced and closed by different tasks.
+                # ContextVar tokens are task-context bound, so restore only when
+                # this span is active in the task that performs the close.
+                if current_span_var.get() == self.span_id:
+                    current_span_var.set(self.parent_span_id)
+                logger.debug(
+                    "Trace span %s exited from a different context",
+                    self.span_id,
+                )
+            finally:
+                self._token = None
 
     # --- 支持 with 语法 ---
     def __enter__(self) -> "TraceSpanContext":

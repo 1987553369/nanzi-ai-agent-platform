@@ -343,6 +343,7 @@ async def test_federated_graceful_degradation(test_config, monkeypatch):
     async def fake_save_last_result(*args, **kwargs):
         pass
     runner._save_last_data_result_for_followups = fake_save_last_result
+    runner._detect_duration_anomaly = MagicMock(return_value=(False, ""))
 
     executor = FederatedQueryExecutor(
         agent_runner=runner,

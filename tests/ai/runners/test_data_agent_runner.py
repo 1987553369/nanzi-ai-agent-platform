@@ -418,6 +418,7 @@ async def test_data_agent_runner_builds_chatbi_toolkit_without_workspace_file_to
     build_toolkit.assert_called_once_with(
         tools,
         approval_mode=runner.permission_options.get("approval_mode"),
+        user_id=runner._current_user_id(),
     )
     assert captured_agent_kwargs["toolkit"] is fake_toolkit
     assert captured_agent_kwargs["offloader"] is fake_workspace
@@ -438,7 +439,7 @@ async def test_data_agent_runner_system_content_includes_data_guardrails(data_co
     assert "SQL Server" in system_content
     assert "TOP N" in system_content
     assert "[当前时间锚点]" in system_content
-    assert "【相对时间 SQL 规则】" in system_content
+    assert "【相对时间使用规则】" in system_content
     assert DataQueryPrompts.SQL_PLAN_ENFORCEMENT not in system_content
     assert "<sql_plan>" not in system_content
     assert DataQueryPrompts.FOLLOWUP_REUSE_CONSTRAINT in system_content
@@ -1373,6 +1374,7 @@ async def test_data_agent_runner_execute_streams_agentscope_native_text(
     monkeypatch,
 ):
     from agentscope.credential import CredentialBase
+    from agentscope.formatter import OpenAIChatFormatter
     from agentscope.message import TextBlock, ToolCallBlock
     from agentscope.model import ChatModelBase, ChatResponse
 
@@ -1443,6 +1445,7 @@ async def test_data_agent_runner_execute_streams_agentscope_native_text(
             credential=FakeCredential(),
             model="fake-native-data",
             parameters=FakeModel.Parameters(),
+            formatter=OpenAIChatFormatter(),
             stream=False,
             max_retries=0,
         ),
@@ -1490,6 +1493,7 @@ async def test_data_agent_runner_stores_successful_sql_result_for_followups(
     monkeypatch,
 ):
     from agentscope.credential import CredentialBase
+    from agentscope.formatter import OpenAIChatFormatter
     from agentscope.message import TextBlock, ToolCallBlock
     from agentscope.model import ChatModelBase, ChatResponse
 
@@ -1552,6 +1556,7 @@ async def test_data_agent_runner_stores_successful_sql_result_for_followups(
             credential=FakeCredential(),
             model="fake-native-data",
             parameters=FakeModel.Parameters(),
+            formatter=OpenAIChatFormatter(),
             stream=False,
             max_retries=0,
         ),
@@ -1631,6 +1636,7 @@ async def test_data_agent_runner_injects_few_shot_examples(
     monkeypatch,
 ):
     from agentscope.credential import CredentialBase
+    from agentscope.formatter import OpenAIChatFormatter
     from agentscope.message import TextBlock, ToolCallBlock
     from agentscope.model import ChatModelBase, ChatResponse
 
@@ -1716,6 +1722,7 @@ async def test_data_agent_runner_injects_few_shot_examples(
             credential=FakeCredential(),
             model="fake-native-data",
             parameters=FakeModel.Parameters(),
+            formatter=OpenAIChatFormatter(),
             stream=False,
             max_retries=0,
         ),
@@ -1852,6 +1859,7 @@ async def test_data_agent_runner_rewrites_contextual_query_and_plans_schema_keyw
     monkeypatch,
 ):
     from agentscope.credential import CredentialBase
+    from agentscope.formatter import OpenAIChatFormatter
     from agentscope.message import TextBlock, ToolCallBlock
     from agentscope.model import ChatModelBase, ChatResponse
 
@@ -1955,6 +1963,7 @@ async def test_data_agent_runner_rewrites_contextual_query_and_plans_schema_keyw
             credential=FakeCredential(),
             model="fake-native-data",
             parameters=FakeModel.Parameters(),
+            formatter=OpenAIChatFormatter(),
             stream=False,
             max_retries=0,
         ),
@@ -2064,6 +2073,7 @@ async def test_data_agent_runner_context_action_can_answer_without_sql(
     monkeypatch,
 ):
     from agentscope.credential import CredentialBase
+    from agentscope.formatter import OpenAIChatFormatter
     from agentscope.message import TextBlock
     from agentscope.model import ChatModelBase, ChatResponse
 
@@ -2124,6 +2134,7 @@ async def test_data_agent_runner_context_action_can_answer_without_sql(
             credential=FakeCredential(),
             model="fake-native-data",
             parameters=FakeModel.Parameters(),
+            formatter=OpenAIChatFormatter(),
             stream=False,
             max_retries=0,
         ),

@@ -1,3 +1,4 @@
+import asyncio
 import sys
 import os
 import time
@@ -125,6 +126,29 @@ async def test_trace_span_exception_handling():
     step = trace_buffer[0]
     assert step.status == "failed"
     assert "Test error message" in step.error_message
+
+
+@pytest.mark.asyncio
+async def test_trace_span_async_generator_can_close_in_a_different_task():
+    trace_buffer = []
+
+    async def stream():
+        async with TraceSpanContext(
+            trace_buffer=trace_buffer,
+            event_type="agent_execution",
+            span_name="StreamingAgent",
+        ):
+            yield "first"
+            yield "second"
+
+    generator = stream()
+    first = await asyncio.wait_for(anext(generator), timeout=0.5)
+    remaining = [item async for item in generator]
+
+    assert first == "first"
+    assert remaining == ["second"]
+    assert trace_buffer[0].status == "success"
+    assert current_span_var.get() is None
 
 
 if __name__ == "__main__":

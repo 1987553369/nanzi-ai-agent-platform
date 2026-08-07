@@ -237,6 +237,7 @@ def derive_keywords_from_semantic_intent(intent: DataQuerySemanticIntent | None,
     for dimension in intent.dimensions:
         add(dimension)
     for item in intent.filters:
+        add(item.phrase)
         for expected in item.expected_column_types:
             add(expected)
     if intent.grain:

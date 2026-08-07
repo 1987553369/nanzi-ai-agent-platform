@@ -458,7 +458,10 @@ async def yield_fresh_data_schema_setup(
         runner._schema_search_keywords or runner._standalone_query or user_question or ""
     ).strip()
     prefetched_schema_output: str | None = None
-    async for chunk in auto_invoke_get_dataset_schema(runner, keywords=schema_keywords, tools=tools):
+    async for chunk in runner._auto_invoke_get_dataset_schema(
+        keywords=schema_keywords,
+        tools=tools,
+    ):
         if chunk.get("__schema_output__") is not None:
             prefetched_schema_output = str(chunk["__schema_output__"])
             continue
