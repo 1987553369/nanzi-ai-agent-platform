@@ -8,7 +8,7 @@
 | Embedding Provider | 兼容 Embedding API | Embedding 配置和 Key | 文档切片、记忆和元数据文本 | 同上，并增加保留期和向量数据分类 |
 | RAGFlow | Dataset、Document/Chunk、`/retrieval`、托管 Agent | `ragflow_api_url`、API Key | 文档、问题、资源 ID 和上下文 | 精确 Host、最小权限 Key、权限交集、熔断和备份责任 |
 | OpenClaw | `/v1/chat/completions` | 系统/Agent Base URL 和 Key | 用户认证上下文、数据集范围和消息 | 上下文签名、精确 Audience、出网白名单和响应校验 |
-| MCP Server | 用户/管理员配置的 SSE/JSON-RPC URL | `sys_mcp_servers` 和 Auth Header | 工具发现、调用参数和业务数据 | SSRF 防护网关、Secret Vault、风险策略、审批、幂等和审计 |
+| MCP Server | 用户/管理员配置的 SSE/JSON-RPC URL | `sys_mcp_servers` 和 Auth Header | 工具发现、调用参数和业务数据 | 已接入固定解析与同源限制；继续建设 egress、Secret Vault、审批、幂等和审计 |
 | 通用 API 工具 | 可配置外部 HTTP 请求 | `sys_api_tools` | 工具特定业务数据 | URL 模板白名单、参数 Schema、禁止任意 Header/URL、响应和超时限制 |
 | 企业 SSO | 配置的登录校验接口 | `SSO_API_URL`、Token 和配置 | 登录身份/断言 | TLS、签名响应、防重放、超时、Fail-closed 和审计 |
 | 业务数据库 | MySQL/PostgreSQL/Oracle/ClickHouse/SQL Server | 加密的 `meta_db_connection_configs` | SQL、元数据、样本和结果 | 网络白名单、只读账号、查询预算、脱敏、连接池和凭据轮换 |

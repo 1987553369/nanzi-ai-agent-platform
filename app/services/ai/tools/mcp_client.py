@@ -15,7 +15,10 @@ from app.utils.mcp_credentials import (
     decrypt_mcp_auth_headers,
     ensure_mcp_runtime_credential_access,
 )
-from app.utils.outbound_url_policy import OutboundUrlPolicyError, validate_outbound_url
+from app.utils.outbound_url_policy import (
+    OutboundUrlPolicyError,
+    create_ssrf_safe_async_client,
+)
 from sqlalchemy import select, update
 
 logger = logging.getLogger(__name__)
@@ -49,12 +52,20 @@ class McpSseSession:
     async def _looks_like_sse_endpoint(self) -> bool:
         """Quick probe: skip SSE when the gateway clearly speaks JSON/HTTP."""
         try:
-            await validate_outbound_url(self.sse_url)
-            async with httpx.AsyncClient(timeout=5.0, follow_redirects=False, trust_env=False) as client:
-                response = await client.get(self.sse_url, headers=self.auth_headers)
-            if 300 <= response.status_code < 400:
-                raise OutboundUrlPolicyError("MCP 服务不允许 HTTP 重定向")
-            content_type = (response.headers.get("content-type") or "").lower()
+            async with create_ssrf_safe_async_client(
+                allowed_url=self.sse_url,
+                timeout=5.0,
+            ) as client:
+                async with client.stream(
+                    "GET",
+                    self.sse_url,
+                    headers=self.auth_headers,
+                ) as response:
+                    if 300 <= response.status_code < 400:
+                        raise OutboundUrlPolicyError("MCP 服务不允许 HTTP 重定向")
+                    content_type = (
+                        response.headers.get("content-type") or ""
+                    ).lower()
             if "text/event-stream" in content_type:
                 return True
             if "application/json" in content_type or "application/rpc" in content_type:
@@ -86,7 +97,6 @@ class McpSseSession:
             header_keys = list(self.auth_headers.keys())
             logger.info(f"[MCP] Connecting to {self.server_id} at {self.sse_url}. Headers keys present: {header_keys}")
             try:
-                await validate_outbound_url(self.sse_url)
                 from contextlib import AsyncExitStack
                 self._exit_stack = AsyncExitStack()
 
@@ -99,17 +109,12 @@ class McpSseSession:
                             if "httpx_client_factory" not in inspect.signature(sse_client).parameters:
                                 raise RuntimeError("当前 MCP SDK 不支持安全 HTTP Client 注入")
 
-                            async def validate_request(request: httpx.Request) -> None:
-                                await validate_outbound_url(str(request.url))
-
                             def safe_httpx_client_factory(*, headers=None, timeout=None, auth=None):
-                                return httpx.AsyncClient(
+                                return create_ssrf_safe_async_client(
+                                    allowed_url=self.sse_url,
                                     headers=headers,
                                     timeout=timeout,
                                     auth=auth,
-                                    follow_redirects=False,
-                                    trust_env=False,
-                                    event_hooks={"request": [validate_request]},
                                 )
 
                             read_stream, write_stream = await self._exit_stack.enter_async_context(
@@ -130,6 +135,8 @@ class McpSseSession:
                         self.is_direct_http = False
                         logger.info(f"[MCP] Standard SSE initialized for {self.server_id}")
                         return
+                    except OutboundUrlPolicyError:
+                        raise
                     except Exception as sse_err:
                         # 多数网关（如 ModelScope）返回 JSON/HTTP 而非 SSE；探测失败后降级，不打堆栈。
                         logger.warning(
@@ -436,8 +443,10 @@ class McpClientService:
             payload["id"] = rpc_id
 
         logger.debug(f"[MCP-Direct] Request: {method} to {session_mgr.sse_url} | RPC ID: {rpc_id} | Headers keys: {list(headers.keys())}")
-        await validate_outbound_url(session_mgr.sse_url)
-        async with httpx.AsyncClient(timeout=30.0, follow_redirects=False, trust_env=False) as client:
+        async with create_ssrf_safe_async_client(
+            allowed_url=session_mgr.sse_url,
+            timeout=30.0,
+        ) as client:
             try:
                 resp = await client.post(session_mgr.sse_url, json=payload, headers=headers)
                 logger.info(f"[MCP-Direct] Response from {method}: HTTP {resp.status_code}")

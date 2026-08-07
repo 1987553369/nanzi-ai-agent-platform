@@ -8,7 +8,7 @@
 | SEC-03 | P0 | 模型/工具/知识 HTML 通过 Markdown `v-html` 执行 | 禁用 HTML、DOMPurify、CSP | 恶意流式 XSS 测试 |
 | SEC-04 | P0 | Embed 信任任意 `postMessage` 并向 `*` 传长期 Key | Origin/Source/nonce 和短期 Scope Token | 跨域和协议浏览器测试 |
 | SEC-05 | P0 | 固定管理员初始化凭据和默认加密材料 | 删除、随机一次性初始化、轮换 | Secret Scan 和 Bootstrap 生命周期测试 |
-| SEC-06 | P1 | MCP 和其他可配置 URL 存在 SSRF | 统一安全出网策略和网关 | Redirect、Rebinding、IPv4/IPv6/元数据测试 |
+| SEC-06 | P1（MCP 已缓解） | MCP 和其他可配置 URL 存在 SSRF | MCP 已固定解析并限制同源；继续覆盖 Generic API、模型、Webhook、通知和网络层 egress | Redirect、Rebinding、IPv4/IPv6/元数据及跨 Origin 测试 |
 | SEC-06A | P1（已缓解） | 历史 MCP 凭据被回显、明文保存和写入日志 | 已完成 DTO 分离、版本化密文、存量隔离迁移和日志脱敏；继续建设 KMS 轮换 | API/状态机契约、双数据库迁移清单、日志脱敏检查 |
 | SEC-07 | P1 | 浏览器长期 API Key、localStorage 和不安全 Cookie/CORS | 安全会话 Cookie、CSRF、精确 Origin | 浏览器安全和会话轮换测试 |
 | SEC-08 | P1 | SSO 关闭 TLS 校验 | 强制证书验证和可信 CA | 无效/不可信证书集成测试 |

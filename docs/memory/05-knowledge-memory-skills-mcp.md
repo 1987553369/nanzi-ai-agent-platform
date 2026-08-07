@@ -32,7 +32,8 @@ MCP：登记 SSE URL/认证 -> 验证/同步工具 -> 绑定资源 -> JSON-RPC �
 
 ## 关键安全边界
 
-- MCP Verify 和 Personal MCP 接受任意 URL，存在 SSRF 和内部网络探测风险。
+- MCP Verify 和 Personal MCP 历史上允许直接连接任意 URL；`NET-A` 已接入固定解析
+  Transport，校验全部 A/AAAA、只连接已验证公网 IP，并禁止重定向和跨 Origin 后续 endpoint。
 - 历史审计曾发现 MCP 响应回显 `auth_headers`、数据库明文保存和日志输出
   Authorization 前缀；`MCP-A` 已改为请求/响应 DTO 分离、版本化密文、无值状态响应、
   旧明文隔离迁移和日志仅输出 Header 名称。后续仍需验证密钥轮换和 KMS 托管。
@@ -43,7 +44,8 @@ MCP：登记 SSE URL/认证 -> 验证/同步工具 -> 绑定资源 -> JSON-RPC �
 
 ## 必须建立的控制
 
-1. 统一安全出网网关：协议/域名策略、A/AAAA 全解析、内网和云元数据阻断、重定向逐跳检查、DNS Pinning、响应和超时限制。
+1. MCP 已完成协议校验、A/AAAA 全解析、内网和云元数据阻断、DNS Pinning、同源约束与超时；
+   生产环境继续增加 egress proxy/NetworkPolicy，并将同一安全 Client 扩展到其他可配置出网点。
 2. 文件安全：MIME 检测、压缩包大小/文件数/深度限制、Canonical Path、恶意文件扫描，默认禁止可执行内容。
 3. Prompt Injection 防护：明确标记外部内容为不可信数据，工具权限由独立策略决定，不能被文档指令改变。
 4. 知识证据：引用片段、文档版本、分数、检索问题、访问判定和数据时效。

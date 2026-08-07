@@ -46,11 +46,12 @@ AgentScope Toolkit
 - 历史审计发现响应回显 `auth_headers`、ORM 明文存储并在日志输出 Authorization 前缀。
   `MCP-A` 已完成请求/响应 DTO 分离、`mcpheaders:v1:` 版本化密文、旧明文隔离迁移、
   运行时拒绝明文、配置变化会话失效和只返回无值轮换状态。
-- `/mcp/verify` 与 MCP 调用已禁止 HTTP 重定向并接入 URL Policy；应用层 DNS 复查仍不能
-  单独证明抗 DNS Rebinding，生产环境仍需固定解析 Transport 或隔离出口代理。
+- `/mcp/verify`、SSE 探测、MCP SDK HTTP Client 与 Direct HTTP 已统一使用固定解析
+  Transport：校验全部 A/AAAA 后只连接选定公网 IP，原域名继续用于 Host、SNI 和证书校验；
+  禁止自动重定向及服务端返回跨 Origin 后续 endpoint。生产仍需隔离出口代理作为纵深防御。
 
-剩余整改：凭据接入 KMS/密钥版本和轮换演练；只允许 HTTPS；固定已校验解析结果；目标域
-allowlist/管理员审批；个人 MCP 走隔离 egress proxy；继续限制危险 headers、响应大小、并发和超时。
+剩余整改：凭据接入 KMS/密钥版本和轮换演练；生产只允许 HTTPS；目标域 allowlist/管理员
+审批；个人 MCP 走隔离 egress proxy；继续限制响应大小、并发和业务级超时。
 
 ## 5. 文件与浏览器
 

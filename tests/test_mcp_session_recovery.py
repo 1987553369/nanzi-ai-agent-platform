@@ -20,8 +20,10 @@ def mock_session():
 
 @pytest.mark.asyncio
 async def test_session_expired_retry(mock_session):
-    # Setup mock for httpx.AsyncClient
-    with patch("httpx.AsyncClient") as MockClient:
+    # Setup mock for the SSRF-safe client factory
+    with patch(
+        "app.services.ai.tools.mcp_client.create_ssrf_safe_async_client"
+    ) as MockClient:
         # Mock context manager
         mock_client_instance = AsyncMock()
         MockClient.return_value.__aenter__.return_value = mock_client_instance
@@ -76,7 +78,9 @@ async def test_session_expired_retry(mock_session):
 @pytest.mark.asyncio
 async def test_session_expired_retry_fail(mock_session):
     # Test that it doesn't loop infinitely
-    with patch("httpx.AsyncClient") as MockClient:
+    with patch(
+        "app.services.ai.tools.mcp_client.create_ssrf_safe_async_client"
+    ) as MockClient:
         mock_client_instance = AsyncMock()
         MockClient.return_value.__aenter__.return_value = mock_client_instance
         
@@ -127,7 +131,9 @@ async def test_direct_http_tool_call_reinitializes_after_server_loses_session(
         McpClientService,
         "get_session",
         AsyncMock(return_value=mock_session),
-    ), patch("httpx.AsyncClient") as MockClient:
+    ), patch(
+        "app.services.ai.tools.mcp_client.create_ssrf_safe_async_client"
+    ) as MockClient:
         mock_client_instance = AsyncMock()
         MockClient.return_value.__aenter__.return_value = mock_client_instance
         mock_client_instance.post.side_effect = [
@@ -178,7 +184,9 @@ async def test_direct_http_json_rpc_session_error_reinitializes(mock_session):
         McpClientService,
         "get_session",
         AsyncMock(return_value=mock_session),
-    ), patch("httpx.AsyncClient") as MockClient:
+    ), patch(
+        "app.services.ai.tools.mcp_client.create_ssrf_safe_async_client"
+    ) as MockClient:
         mock_client_instance = AsyncMock()
         MockClient.return_value.__aenter__.return_value = mock_client_instance
         mock_client_instance.post.side_effect = [
@@ -246,7 +254,9 @@ async def test_failed_initialized_notification_does_not_reenter_recovery_lock(mo
         json={"jsonrpc": "2.0", "error": {"code": -32001, "message": "Session not found"}},
     )
 
-    with patch("httpx.AsyncClient") as MockClient:
+    with patch(
+        "app.services.ai.tools.mcp_client.create_ssrf_safe_async_client"
+    ) as MockClient:
         mock_client_instance = AsyncMock()
         MockClient.return_value.__aenter__.return_value = mock_client_instance
         mock_client_instance.post.side_effect = [initialize_response, notification_error]
@@ -265,14 +275,16 @@ async def test_failed_initialized_notification_does_not_reenter_recovery_lock(mo
 async def test_json_content_type_skips_sse_probe_without_raising():
     session = McpSseSession(SERVER_ID, SSE_URL, AUTH_HEADERS)
 
-    with patch("httpx.AsyncClient") as MockClient:
+    with patch(
+        "app.services.ai.tools.mcp_client.create_ssrf_safe_async_client"
+    ) as MockClient:
         mock_client_instance = AsyncMock()
         MockClient.return_value.__aenter__.return_value = mock_client_instance
-        mock_client_instance.get.return_value = Response(
-            200,
-            headers={"content-type": "application/json"},
-            json={"ok": True},
+        stream_context = AsyncMock()
+        stream_context.__aenter__.return_value = Response(
+            200, headers={"content-type": "application/json"}
         )
+        mock_client_instance.stream = MagicMock(return_value=stream_context)
 
         assert await session._looks_like_sse_endpoint() is False
 

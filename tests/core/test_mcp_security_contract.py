@@ -28,9 +28,14 @@ def test_mcp_client_redacts_credentials_and_disables_redirects():
     assert "Auth Value" not in client
     assert "Sending Authorization" not in client
     assert "follow_redirects=True" not in client
-    assert "follow_redirects=False" in client
-    assert "validate_outbound_url" in client
+    assert "create_ssrf_safe_async_client" in client
+    assert "httpx.AsyncClient(" not in client
+    assert "allowed_url=self.sse_url" in client
+    assert "allowed_url=session_mgr.sse_url" in client
+    assert "except OutboundUrlPolicyError:" in client
     assert "httpx_client_factory" in client
+    assert "client.stream(" in client
+    assert "await client.get(" not in client
 
 
 def test_mcp_frontend_preserves_secret_without_server_echo():

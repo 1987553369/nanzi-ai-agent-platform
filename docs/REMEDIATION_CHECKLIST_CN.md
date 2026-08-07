@@ -15,7 +15,7 @@
 | [x] | WEB-P0-03 | 修复 Embed `postMessage` 信任和凭据传递 | `EmbedChat.vue`、`Chat.vue`、Widget Debugger、集成文档 | 校验 Origin/Source/nonce；禁止 `*`；Portal 不再传长期 API Key |
 | [x] | AUTH-P0-01 | 删除固定管理员 API Key 和公共默认长期 Secret | 初始化 SQL、安装脚本、示例配置 | 安装随机生成一次性凭据；Secret Scan 无有效固定凭据 |
 | [x] | MCP-P0-01 | 阻止 MCP 凭据回显和日志泄露 | MCP DTO、Model、Client、前端表单 | 列表/详情仅返回配置状态；日志无 Header 值；新写入和存量凭据均使用版本化密文；明文运行时回退已禁用 |
-| [~] | NET-P0-01 | 建立统一 SSRF 防护并接入 MCP | URL Policy、MCP Client/Endpoint | 阻断私网、Loopback、Link-local、云元数据、IPv6、重定向；DNS 复查已接入，最终需固定解析/出口代理 |
+| [x] | NET-P0-01 | 建立统一 SSRF 防护并接入 MCP | URL Policy、MCP Client/Endpoint | 全量校验 A/AAAA；固定已验证 IP 连接并保留 Host/SNI；阻断私网、Loopback、Link-local、云元数据、跨 Origin 和重定向 |
 
 ## 二、P1 工程与安全稳定（P0 后 2-6 周）
 
@@ -52,7 +52,7 @@
 |---|---|---|
 | AUTH-P0-02 | 第三方跨域 Embed 仍需要短期、限受众 Embed Token 签发/撤销服务 | 新增 Token 表/签发接口、Origin/Agent 绑定、TTL、撤销和审计后再开放生产跨域嵌入 |
 | SEC-P0-02 | 代码执行当前只做了权限止血，执行进程仍在平台边界内 | 独立 Worker/Queue，非 root、只读根、无 Secret、网络/CPU/内存/PID/超时策略 |
-| NET-P0-02 | 应用层 DNS 复查无法单独证明抗 DNS Rebinding | egress proxy/NetworkPolicy 固定出口，或实现带 SNI 的 IP pinning transport，并做重绑定演练 |
+| NET-P0-02 | MCP 已完成应用层 IP Pinning，但其他 Generic API、模型发现、Webhook、通知等出网点尚未统一接入，且生产环境仍缺网络层纵深防御 | 将统一安全 Client 扩展到所有用户可配置 URL；部署 egress proxy/NetworkPolicy 并做跨协议重绑定演练 |
 
 ## 四、产品与平台完善（2-9 个月）
 
@@ -99,3 +99,5 @@
 | 2026-08-06 | DB-A 验证 | Python 3.11 下 Fresh、重跑、N-1 Upgrade、旧库指定版本基线、Checksum 篡改、脏状态、历史文件缺失、并发锁和 Shell 透传等迁移契约测试 67 项通过；Python 编译、Bash 语法和 `git diff --check` 通过；未连接或修改任何实际数据库 |
 | 2026-08-07 | MCP-A | 新增 MySQL V117/PostgreSQL V16 凭据隔离状态；旧明文服务自动禁用；离线命令支持 dry-run、批量加密、逐行锁和失败隔离；运行时删除明文回退并每次校验持久化状态；API/前端提供不回显值的轮换状态，配置变化销毁旧会话 |
 | 2026-08-07 | MCP-A 验证 | Python 3.11 凭据状态机/安全契约 29 项及迁移清单契约 25 项通过；MCP 前端专项 31 项及 `tests/frontend` 全量 320 项通过；`npm run build` 完整通过（10,386 个模块）；Python 编译和 `git diff --check` 通过；未执行任何实际数据库迁移 |
+| 2026-08-07 | NET-A | 新增固定解析 HTTP Transport：每次请求只解析一次并校验全部 A/AAAA，实际连接使用已验证公网 IP，原域名保留为 Host/SNI/证书校验名称；连接池按原域名和 IP 隔离；MCP 探测、SSE SDK 与 Direct HTTP 全部接入；禁止重定向和跨 Origin 后续 endpoint |
+| 2026-08-07 | NET-A 验证 | Python 3.11 URL Policy、固定解析、MCP 安全及凭据状态机契约 56 项通过；迁移相关契约 19 项、`tests/frontend` 全量 320 项通过；`httpx` 下限收敛到已验证的 0.27；Python 编译和 `git diff --check` 通过；本机缺少 MCP SDK 和必填集成环境，未执行真实远端 MCP 联调 |
