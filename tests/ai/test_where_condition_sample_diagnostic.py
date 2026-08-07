@@ -251,12 +251,15 @@ dataset: ds_a
 data_source: oracle
 table_name: VIEW_A
 columns:
-  - contract_end_date (varchar, 例: '2026-01-15')
+  - name: contract_end_date
+    type: varchar
+    examples: ['2026-01-15']
 dataset: ds_b
 data_source: oracle
 table_name: VIEW_B
 columns:
-  - other_col (varchar)
+  - name: other_col
+    type: varchar
 """
     cols, hints = build_where_probe_schema_context_for_dataset("ds_a", schema_output=schema_output)
     assert cols is not None

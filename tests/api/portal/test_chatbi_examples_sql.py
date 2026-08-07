@@ -10,7 +10,8 @@ from app.models.user import User
 pytestmark = pytest.mark.no_infrastructure
 
 
-def test_chatbi_examples_user_join_casts_numeric_user_id_for_postgresql():
+def test_chatbi_examples_user_join_casts_numeric_user_id_for_postgresql(monkeypatch):
+    monkeypatch.setattr("app.core.config.settings.DATABASE_TYPE", "postgresql")
     statement = select(ChatBIExample.id).select_from(ChatBIExample).outerjoin(
         User,
         _chatbi_example_user_join(),

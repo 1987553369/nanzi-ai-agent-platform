@@ -9,7 +9,10 @@ from app.services.ai.tools.data_api import (
     get_dataset_schema,
     execute_sql_query
 )
-from app.services.chatbi_dataset_schema_service import filter_schema_hits_to_scope
+from app.services.chatbi_dataset_schema_service import (
+    fetch_dataset_schema_core,
+    filter_schema_hits_to_scope,
+)
 
 # --- SQL Validation Tests ---
 
@@ -119,13 +122,15 @@ async def test_call_ragflow_api_success():
 @pytest.mark.no_infrastructure
 async def test_get_dataset_schema_tool():
     """local 模式优先走本地向量检索，而不是返回全量授权 YAML。"""
+    session = MagicMock()
+    session.execute = AsyncMock()
+    session.execute.return_value.scalars.return_value.all.return_value = []
     mock_ds = MagicMock()
     mock_ds.id = 1
     mock_ds.display_name = "User Stats"
     mock_ds.name = "user_stats"
 
-    with patch("app.core.orm.AsyncSessionLocal", new_callable=MagicMock), \
-         patch("app.services.config_service.ConfigService.get", new_callable=AsyncMock) as mock_config, \
+    with patch("app.services.config_service.ConfigService.get", new_callable=AsyncMock) as mock_config, \
          patch("app.services.metadata_service.MetadataService.search_datasets", new_callable=AsyncMock) as mock_search, \
          patch("app.services.metadata_service.MetadataService.export_dataset_yaml", new_callable=AsyncMock) as mock_export, \
          patch("app.services.ai.embedding_client.EmbeddingClient.embed_text", new_callable=AsyncMock) as mock_embed, \
@@ -151,7 +156,7 @@ async def test_get_dataset_schema_tool():
             }
         ]
         
-        result = await get_dataset_schema.ainvoke({"keywords": "user_stats"})
+        result = await fetch_dataset_schema_core(session, keywords="user_stats")
 
         assert "--- [Schema:1]" in result
         assert "score=0.86" in result
@@ -170,6 +175,9 @@ async def test_get_dataset_schema_tool():
 @pytest.mark.no_infrastructure
 async def test_get_dataset_schema_tool_local_falls_back_to_mysql_like_when_vector_fails():
     """local 向量检索异常时，降级为 MySQL LIKE 命中数据集后导出 YAML。"""
+    session = MagicMock()
+    session.execute = AsyncMock()
+    session.execute.return_value.scalars.return_value.all.return_value = []
     authorized_ds = MagicMock()
     authorized_ds.id = 1
     authorized_ds.display_name = "User Stats"
@@ -179,8 +187,7 @@ async def test_get_dataset_schema_tool_local_falls_back_to_mysql_like_when_vecto
     matched_ds.display_name = "Order Stats"
     matched_ds.name = "order_stats"
 
-    with patch("app.core.orm.AsyncSessionLocal", new_callable=MagicMock), \
-         patch("app.services.config_service.ConfigService.get", new_callable=AsyncMock) as mock_config, \
+    with patch("app.services.config_service.ConfigService.get", new_callable=AsyncMock) as mock_config, \
          patch("app.services.metadata_service.MetadataService.search_datasets", new_callable=AsyncMock) as mock_search, \
          patch("app.services.metadata_service.MetadataService.build_dataset_schema_chunk_contents", new_callable=AsyncMock) as mock_build_chunks, \
          patch("app.services.ai.embedding_client.EmbeddingClient.embed_text", new_callable=AsyncMock) as mock_embed, \
@@ -199,7 +206,7 @@ async def test_get_dataset_schema_tool_local_falls_back_to_mysql_like_when_vecto
         mock_search_knn.side_effect = RuntimeError("redis unavailable")
         mock_build_chunks.return_value = ["table_name: orders\ndataset: order_stats\n"]
 
-        result = await get_dataset_schema.ainvoke({"keywords": "order"})
+        result = await fetch_dataset_schema_core(session, keywords="order")
 
         assert "--- [Schema:1]" in result
         assert "table_name: orders" in result

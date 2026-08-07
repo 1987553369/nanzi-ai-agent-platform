@@ -58,7 +58,17 @@ async def test_execute_multi_agent_parallel():
                 
                 chunks = []
                 async for chunk in service._execute_multi_agent(
-                    primary_config, ["secondary-id"], "hello", [], "trace-1", [], {}, None, None, None, SESSION_TURN
+                    primary_config,
+                    ["secondary-id"],
+                    "hello",
+                    [],
+                    "trace-1",
+                    [],
+                    {},
+                    None,
+                    None,
+                    None,
+                    session_turn=SESSION_TURN,
                 ):
                     chunks.append(chunk)
                 
@@ -112,7 +122,17 @@ async def test_multi_agent_error_handling():
             with patch.object(AgentService, '_synthesize_multi_agent_results', side_effect=mock_synthesis):
                 chunks = []
                 async for chunk in service._execute_multi_agent(
-                    primary_config, ["secondary-id"], "hello", [], "trace-1", [], {}, None, None, None, SESSION_TURN
+                    primary_config,
+                    ["secondary-id"],
+                    "hello",
+                    [],
+                    "trace-1",
+                    [],
+                    {},
+                    None,
+                    None,
+                    None,
+                    session_turn=SESSION_TURN,
                 ):
                     chunks.append(chunk)
                 

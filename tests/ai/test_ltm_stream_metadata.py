@@ -23,6 +23,7 @@ async def test_ltm_applied_in_stream_meta():
         model_name="test-model",
         temperature=0.0,
         system_prompt="You are a helper.",
+        tools=[],
     )
     
     # 模拟 LTM 记忆
@@ -101,6 +102,7 @@ async def test_ignore_ltm_in_stream_meta():
         model_name="test-model",
         temperature=0.0,
         system_prompt="You are a helper.",
+        tools=[],
     )
     
     mock_turn_classification = MagicMock()

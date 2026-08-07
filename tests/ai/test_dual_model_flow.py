@@ -56,7 +56,7 @@ async def test_agentscope_native_tool_execution_flow():
                     is_last=True,
                 )
             return ChatResponse(
-                content=[TextBlock(text="Final Answer from AgentScope")],
+                content=[TextBlock(text="Final Answer from AgentScope with enough detail to be complete.")],
                 is_last=True,
             )
 
