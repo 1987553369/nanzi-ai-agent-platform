@@ -64,6 +64,25 @@ def test_development_allows_local_placeholder_configuration():
     settings.validate_runtime_configuration()
 
 
+def test_private_outbound_approval_requires_exact_host_and_cidr():
+    settings = _build_settings(
+        RAGFLOW_ALLOWED_PRIVATE_HOSTS=["ragflow.internal"],
+        RAGFLOW_ALLOWED_PRIVATE_CIDRS=[],
+    )
+
+    with pytest.raises(ValueError, match="私网出网审批配置无效"):
+        settings.validate_runtime_configuration()
+
+
+def test_private_outbound_approval_accepts_scoped_rfc1918_network():
+    settings = _build_settings(
+        RAGFLOW_ALLOWED_PRIVATE_HOSTS=["ragflow.internal"],
+        RAGFLOW_ALLOWED_PRIVATE_CIDRS=["10.20.1.0/24"],
+    )
+
+    settings.validate_runtime_configuration()
+
+
 @pytest.mark.parametrize(
     ("overrides", "message"),
     [

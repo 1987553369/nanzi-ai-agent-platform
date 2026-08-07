@@ -1,4 +1,5 @@
 import json
+import logging
 import time
 import uuid
 import httpx
@@ -14,8 +15,13 @@ from app.services.ai.ragflow_client import RagFlowClient
 from app.services.knowledge_base_service import KnowledgeBaseMetadataService
 from app.services.audit_service import AuditService
 from app.models.permission import ResourcePermission
+from app.utils.integration_outbound import (
+    create_integration_outbound_client,
+    integration_urls_share_origin,
+)
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 class CreateDatasetRequest(BaseModel):
@@ -246,13 +252,26 @@ async def list_ragflow_agents(
     real_url = override_url if override_url else None
     real_key = override_key if override_key and "****" not in override_key else None
     
-    if real_url and real_key:
-        base_url = real_url
-        api_key = real_key
-    else:
-        db_url, db_key = await get_ragflow_client()
-        base_url = real_url or db_url
-        api_key = real_key or db_key
+    db_url, db_key = await get_ragflow_client()
+    if real_url and not real_key:
+        try:
+            can_reuse_stored_key = integration_urls_share_origin(
+                "ragflow",
+                real_url,
+                db_url,
+            )
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail="RAGFlow URL 未通过出网审批",
+            ) from exc
+        if not can_reuse_stored_key:
+            raise HTTPException(
+                status_code=400,
+                detail="已保存的 RAGFlow API Key 不能发送到其他 Origin",
+            )
+    base_url = real_url or db_url
+    api_key = real_key or db_key
     
     base_url = base_url.rstrip("/")
     url = f"{base_url}/api/v1/agents"
@@ -260,15 +279,27 @@ async def list_ragflow_agents(
     headers = {"Authorization": f"Bearer {api_key}"}
     params = {"page": page, "page_size": page_size}
     
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        try:
+    try:
+        async with create_integration_outbound_client(
+            "ragflow",
+            allowed_url=url,
+            timeout=10.0,
+        ) as client:
             resp = await client.get(url, headers=headers, params=params)
             if resp.status_code == 200:
                 return resp.json()
-            else:
-                raise HTTPException(status_code=resp.status_code, detail=f"RAGFlow Error: {resp.text}")
-        except httpx.RequestError as e:
-            raise HTTPException(status_code=502, detail=f"Failed to connect to RAGFlow: {str(e)}")
+            raise HTTPException(
+                status_code=502,
+                detail=f"RAGFlow 服务响应异常: {resp.status_code}",
+            )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.warning(
+            "RAGFlow agent list request failed: %s",
+            type(exc).__name__,
+        )
+        raise HTTPException(status_code=502, detail="RAGFlow 服务暂时不可用") from exc
 
 @router.get("/datasets")
 async def list_ragflow_datasets(
@@ -1254,4 +1285,3 @@ async def delete_dataset_permission(
         await perm_service.invalidate_cached_permissions_for_users(affected_user_ids)
 
     return {"code": 0, "message": "授权已成功取消"}
-

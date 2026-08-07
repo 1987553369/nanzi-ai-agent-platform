@@ -8,7 +8,7 @@
 | SEC-03 | P0 | 模型/工具/知识 HTML 通过 Markdown `v-html` 执行 | 禁用 HTML、DOMPurify、CSP | 恶意流式 XSS 测试 |
 | SEC-04 | P0 | Embed 信任任意 `postMessage` 并向 `*` 传长期 Key | Origin/Source/nonce 和短期 Scope Token | 跨域和协议浏览器测试 |
 | SEC-05 | P0 | 固定管理员初始化凭据和默认加密材料 | 删除、随机一次性初始化、轮换 | Secret Scan 和 Bootstrap 生命周期测试 |
-| SEC-06 | P1（公网 HTTP 路径已缓解） | MCP 和其他可配置 URL 存在 SSRF | MCP、用户 HTTP 工具、Generic API、模型发现/Embedding、网页抓取和 HTTP Webhook 已固定解析；继续覆盖管理员内网集成、模型 SDK、SMTP、Browser Worker 和网络层 egress | Redirect、Rebinding、IPv4/IPv6/元数据、跨 Origin 与跨协议测试 |
+| SEC-06 | P1（应用 HTTP 路径已缓解） | MCP 和其他可配置 URL 存在 SSRF | 公网 HTTP 路径已固定解析；RAGFlow/OpenClaw/External SQL 私网 HTTP 要求集成专属 Host + CIDR 并绑定凭据 Origin；继续覆盖数据库原生协议、模型 SDK、SMTP、Browser Worker 和网络层 egress | Redirect、Rebinding、IPv4/IPv6/元数据、私网审批、跨 Origin 与跨协议测试 |
 | SEC-06A | P1（已缓解） | 历史 MCP 凭据被回显、明文保存和写入日志 | 已完成 DTO 分离、版本化密文、存量隔离迁移和日志脱敏；继续建设 KMS 轮换 | API/状态机契约、双数据库迁移清单、日志脱敏检查 |
 | SEC-07 | P1 | 浏览器长期 API Key、localStorage 和不安全 Cookie/CORS | 安全会话 Cookie、CSRF、精确 Origin | 浏览器安全和会话轮换测试 |
 | SEC-08 | P1（已缓解） | SSO 历史上关闭 TLS 校验且用户目录调用阻塞事件循环 | 已强制 HTTPS/TLS 与固定解析、禁用代理/重定向、异步化目录同步并稳定错误映射；继续建设响应签名和防重放 | 固定解析契约、离线目录单测；待无效/不可信证书集成测试 |

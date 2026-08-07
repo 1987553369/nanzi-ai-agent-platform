@@ -1,11 +1,12 @@
 import logging
-import httpx
 import json
 from typing import Any, Optional
 from app.services.ai.tools.tool_compat import tool
 from app.core.config import settings
 import re
 import asyncio
+from app.utils.integration_outbound import create_integration_outbound_client
+from app.utils.outbound_url_policy import redact_outbound_url_for_log
 
 logger = logging.getLogger(__name__)
 
@@ -209,9 +210,11 @@ async def call_external_sql_api(
             return f"[TOOL_ERROR] 本地执行 SQL 失败，错误信息: {str(e)}\n\n[Executed SQL]:\n{sql}"
 
     # 4. 远程 API 调用模式分支
-    from app.core.http_client import GlobalHttpClient
     api_url = await ConfigService.get("external_sql_api_url")
     api_key = await ConfigService.get("external_sql_api_key")
+
+    if not api_url or not api_key:
+        return "[TOOL_ERROR] External SQL API URL or API Key is not configured."
 
     headers = {
         "Content-Type": "application/json",
@@ -223,20 +226,22 @@ async def call_external_sql_api(
         "params": {}
     }
 
-    logger.info(f"[Agent Remote] Calling External SQL API: {api_url} (Cached: False)")
+    logger.info(
+        "[Agent Remote] Calling External SQL API origin=%s data_source=%s",
+        redact_outbound_url_for_log(api_url),
+        data_source,
+    )
 
     try:
-        client = await GlobalHttpClient.get_client()
-        response = await client.post(api_url, headers=headers, json=payload, timeout=timeout)
+        async with create_integration_outbound_client(
+            "external_sql",
+            allowed_url=api_url,
+            timeout=timeout,
+        ) as client:
+            response = await client.post(api_url, headers=headers, json=payload)
 
         if response.is_error:
-            error_detail = response.text
-            try:
-                error_json = response.json()
-                error_detail = error_json.get("message") or error_detail
-            except:
-                pass
-            return f"[TOOL_ERROR] External API Error ({response.status_code}): {error_detail}\n\n[Executed SQL]:\n{sql}"
+            return f"[TOOL_ERROR] External API Error ({response.status_code}).\n\n[Executed SQL]:\n{sql}"
 
         resp_data = response.json()
         if resp_data.get("code") != 200:
@@ -249,10 +254,12 @@ async def call_external_sql_api(
 
         return result_json
 
-    except httpx.HTTPStatusError as e:
-        return f"[TOOL_ERROR] HTTP Error: {e.response.text}\n\n[Executed SQL]:\n{sql}"
-    except Exception as e:
-        return f"[TOOL_ERROR] Failed to execute SQL via External API: {str(e)}\n\n[Executed SQL]:\n{sql}"
+    except Exception as exc:
+        logger.warning(
+            "External SQL API request failed: %s",
+            type(exc).__name__,
+        )
+        return f"[TOOL_ERROR] External SQL API is temporarily unavailable.\n\n[Executed SQL]:\n{sql}"
 
 async def call_ragflow_api(query: str, dataset_ids: list[str]) -> str:
     """
@@ -282,16 +289,19 @@ async def call_ragflow_api(query: str, dataset_ids: list[str]) -> str:
         "vector_similarity_weight": 0.5
     }
 
-    logger.info(f"[RAGFlow] Retrieving from {dataset_ids} for query: {query}")
-
-    # [Debug Logging]
-    masked_key = api_key[:4] + "***" if api_key and len(api_key) > 4 else "***"
-    logger.info(f"[Agent Debug] RAGFlow Endpoint: {endpoint}")
-    logger.info(f"[Agent Debug] RAGFlow Headers: Authorization=Bearer {masked_key}")
-    logger.info(f"[Agent Debug] RAGFlow Payload: {json.dumps(payload, ensure_ascii=False)}")
+    logger.info(
+        "[RAGFlow] Retrieval origin=%s dataset_count=%s query_length=%s",
+        redact_outbound_url_for_log(endpoint),
+        len(dataset_ids),
+        len(query),
+    )
 
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with create_integration_outbound_client(
+            "ragflow",
+            allowed_url=endpoint,
+            timeout=10.0,
+        ) as client:
             response = await client.post(endpoint, headers=headers, json=payload)
 
             if response.status_code != 200:
@@ -322,9 +332,9 @@ async def call_ragflow_api(query: str, dataset_ids: list[str]) -> str:
                 formatted_chunks.append(f"[置信度: {similarity:.2f}]\n{content}")
 
             return "\n\n".join(formatted_chunks)
-    except Exception as e:
-        logger.error(f"[RAGFlow] Exception: {e}")
-        return f"[RAG Connection Error] {str(e)}"
+    except Exception as exc:
+        logger.warning("[RAGFlow] Retrieval failed: %s", type(exc).__name__)
+        return "[RAG Connection Error] RAGFlow service is temporarily unavailable."
 
 def _normalize_metadata_dataset_ids(raw: Any) -> Optional[list[int]]:
     if raw is None:

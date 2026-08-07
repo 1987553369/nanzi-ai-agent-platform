@@ -58,11 +58,17 @@ class Settings(BaseSettings):
     # External SQL API
     EXTERNAL_SQL_API_URL: Optional[str] = None
     EXTERNAL_SQL_API_KEY: Optional[str] = None
+    EXTERNAL_SQL_ALLOWED_PRIVATE_HOSTS: List[str] = []
+    EXTERNAL_SQL_ALLOWED_PRIVATE_CIDRS: List[str] = []
 
     # Metadata & RAG
     METADATA_PROVIDER: str = "local" # local / ragflow
     RAGFLOW_API_URL: Optional[str] = None
     RAGFLOW_API_KEY: Optional[str] = None
+    RAGFLOW_ALLOWED_PRIVATE_HOSTS: List[str] = []
+    RAGFLOW_ALLOWED_PRIVATE_CIDRS: List[str] = []
+    OPENCLAW_ALLOWED_PRIVATE_HOSTS: List[str] = []
+    OPENCLAW_ALLOWED_PRIVATE_CIDRS: List[str] = []
 
     # Ebbinghaus Memory Configs
     MEMORY_BASE_HALF_LIFE: float = 7.0
@@ -78,6 +84,33 @@ class Settings(BaseSettings):
 
     def validate_runtime_configuration(self) -> None:
         """Reject unusable placeholder secrets before a production process serves traffic."""
+        from app.utils.outbound_url_policy import create_private_network_access_policy
+
+        private_network_configs = {
+            "RAGFLOW": (
+                self.RAGFLOW_ALLOWED_PRIVATE_HOSTS,
+                self.RAGFLOW_ALLOWED_PRIVATE_CIDRS,
+            ),
+            "OPENCLAW": (
+                self.OPENCLAW_ALLOWED_PRIVATE_HOSTS,
+                self.OPENCLAW_ALLOWED_PRIVATE_CIDRS,
+            ),
+            "EXTERNAL_SQL": (
+                self.EXTERNAL_SQL_ALLOWED_PRIVATE_HOSTS,
+                self.EXTERNAL_SQL_ALLOWED_PRIVATE_CIDRS,
+            ),
+        }
+        private_network_errors = []
+        for integration, (allowed_hosts, allowed_cidrs) in private_network_configs.items():
+            try:
+                create_private_network_access_policy(allowed_hosts, allowed_cidrs)
+            except ValueError as exc:
+                private_network_errors.append(f"{integration}: {exc}")
+        if private_network_errors:
+            raise ValueError(
+                "私网出网审批配置无效: " + ", ".join(private_network_errors)
+            )
+
         if self.API_SERVICE_ENV.strip().lower() not in {"prod", "production"}:
             return
 

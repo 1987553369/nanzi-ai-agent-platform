@@ -38,9 +38,10 @@
 - MCP 凭据回显、明文保存和日志前缀泄露属于历史发现，已在 `MCP-A` 修复：响应只返回
   `has_auth_headers`/`credential_status`，新写入使用 `mcpheaders:v1:` 密文，存量明文先禁用
   隔离再由离线命令迁移，运行时拒绝明文回退。剩余工作是接入 KMS 和演练密钥轮换。
-- `NET-A/NET-B/NET-C` 已为 MCP、用户 HTTP 工具、公开网页抓取、Generic API、模型发现/
-  Embedding、HTTP Webhook 和 SSO 接入固定解析；模型存量 Key 绑定 Provider/Origin。RAGFlow、
-  OpenClaw、External SQL、AgentScope SDK、SMTP 与生产 egress 仍需继续治理。
+- `NET-A/NET-B/NET-C/NET-D` 已为 MCP、用户 HTTP 工具、公开网页抓取、Generic API、模型发现/
+  Embedding、HTTP Webhook、SSO、RAGFlow、OpenClaw 和 External SQL HTTP 网关接入固定解析；
+  受控私网目标要求集成专属精确 Host 与 CIDR 双重审批，存量模型/RAGFlow/OpenClaw Key 绑定
+  Origin。数据库原生协议、AgentScope SDK、SMTP 与生产 egress 仍需继续治理。
 - SSO 已强制 HTTPS/TLS 证书校验、固定 DNS 解析并禁止环境代理和自动重定向；登录失败不再向
   未认证调用者回显底层连接异常。后续仍需补充服务端响应签名、防重放和真实不可信证书联调。
 - Cookie 固定 `secure=False`，长期 API Key 返回浏览器并保存在 `localStorage`。

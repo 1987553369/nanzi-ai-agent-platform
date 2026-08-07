@@ -10,11 +10,11 @@
 | Redis | `REDIS_*` | Redis Stack/向量使用 DB 0；认证/TLS 与部署一致；状态层 HA 且 `noeviction` |
 | 加密 | `ENCRYPTION_KEY` | KMS/Secret Manager、密钥版本和轮换方案，密钥版本随数据一起备份 |
 | 模型 | `LLM_*`、模型表配置 | Provider 和目标地址审批，Key 加密，明确数据分类、驻留和费用预算 |
-| 知识 | `RAGFLOW_*`、`knowledge_ragflow_*` | 固定受管 Host、最小权限 Key、本地与 RAGFlow 权限取交集 |
+| 知识 | `RAGFLOW_*`、`knowledge_ragflow_*` | 私网目标必须配置 `RAGFLOW_ALLOWED_PRIVATE_HOSTS/CIDRS`，最小权限 Key，本地与 RAGFlow 权限取交集 |
 | Embedding | `embed_*` | Key 加密，并检查模型和维度兼容性 |
 | SSO | `SSO_*`、`yovole_sso_enabled` | 禁止公开默认 Token，响应防重放，异常 Fail-closed |
-| OpenClaw | `openclaw_*` | 目标 Host 审批，认证上下文签名并绑定 Audience |
-| SQL | `sql_execution_mode`、外部 SQL 配置 | 默认只读，生产启动时拒绝不安全开发模式 |
+| OpenClaw | `openclaw_*`、`OPENCLAW_ALLOWED_PRIVATE_HOSTS/CIDRS` | 私网精确 Host + CIDR，认证上下文签名并绑定 Audience |
+| SQL | `sql_execution_mode`、外部 SQL 配置、`EXTERNAL_SQL_ALLOWED_PRIVATE_HOSTS/CIDRS` | HTTP 网关私网精确 Host + CIDR；数据库账号默认只读，生产拒绝不安全开发模式 |
 | Agent 运行 | `agent_*`、`sub_agent_*` | 限制迭代、上下文、锁 TTL、超时和输出；变更需审计和版本化 |
 | Skills | `skill_auto_*`、Workspace Root | 文件字节/数量限制、Canonical 隔离路径和不可变发布包 |
 | 审计 | `audit_log_retention_days` | 根据法律和安全要求确定保留期，并验证容量和删除结果 |

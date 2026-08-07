@@ -1,9 +1,13 @@
 import json
 import logging
-import httpx
 import uuid
 from typing import AsyncGenerator, Dict, List, Optional, Any
 from app.services.config_service import ConfigService
+from app.utils.integration_outbound import (
+    create_integration_outbound_client,
+    integration_urls_share_origin,
+)
+from app.utils.outbound_url_policy import redact_outbound_url_for_log
 
 logger = logging.getLogger(__name__)
 
@@ -62,8 +66,6 @@ def summarize_openclaw_payload_for_log(payload: Dict[str, Any]) -> Dict[str, Any
     return {
         "model": payload.get("model"),
         "stream": payload.get("stream"),
-        "user": payload.get("user"),
-        "conversation_id": payload.get("conversation_id"),
         "message_count": len(messages) if isinstance(messages, list) else 0,
         "extra_param_keys": extra_param_keys,
     }
@@ -120,8 +122,34 @@ class OpenClawClient:
         await self._ensure_config()
         
         # 优先使用智能体配置中的参数
-        base_url = (config.get("base_url") if config else None) or self.base_url
-        api_key = (config.get("api_key") if config else None) or self.api_key
+        override_base_url = config.get("base_url") if config else None
+        override_api_key = config.get("api_key") if config else None
+        base_url = override_base_url or self.base_url
+        if override_api_key:
+            api_key = override_api_key
+        elif override_base_url:
+            try:
+                can_reuse_stored_key = bool(
+                    self.base_url
+                    and integration_urls_share_origin(
+                        "openclaw",
+                        override_base_url,
+                        self.base_url,
+                    )
+                )
+            except ValueError as exc:
+                logger.warning(
+                    "[OpenClaw] Override URL failed outbound policy: %s",
+                    type(exc).__name__,
+                )
+                yield {
+                    "type": "error",
+                    "content": "OpenClaw API URL is not approved by outbound policy.",
+                }
+                return
+            api_key = self.api_key if can_reuse_stored_key else None
+        else:
+            api_key = self.api_key
         model = (config.get("model") if config else None) or "openclaw-v1"
 
         if not base_url:
@@ -176,17 +204,24 @@ class OpenClawClient:
 
         logger.info(
             "[OpenClaw] Requesting %s with payload summary: %s",
-            url,
+            redact_outbound_url_for_log(url),
             json.dumps(summarize_openclaw_payload_for_log(payload), ensure_ascii=False),
         )
 
         try:
-            async with httpx.AsyncClient(timeout=180.0) as client:
+            async with create_integration_outbound_client(
+                "openclaw",
+                allowed_url=url,
+                timeout=180.0,
+            ) as client:
                 if is_stream:
                     async with client.stream("POST", url, headers=headers, json=payload) as response:
                         if response.status_code != 200:
-                            error_text = await response.aread()
-                            logger.error(f"[OpenClaw] API Error ({response.status_code}): {error_text.decode()}")
+                            await response.aread()
+                            logger.error(
+                                "[OpenClaw] API Error status=%s",
+                                response.status_code,
+                            )
                             yield {"type": "error", "content": f"OpenClaw API Error: {response.status_code}"}
                             return
 
@@ -212,13 +247,19 @@ class OpenClawClient:
                                         yield {"type": "answer", "content": content}
                             except json.JSONDecodeError:
                                 if data_str:
-                                    logger.debug(f"[OpenClaw] Non-JSON SSE line: {line}")
+                                    logger.debug(
+                                        "[OpenClaw] Ignored non-JSON SSE line length=%s",
+                                        len(line),
+                                    )
                                 continue
                 else:
                     # Non-streaming request
                     response = await client.post(url, headers=headers, json=payload)
                     if response.status_code != 200:
-                        logger.error(f"[OpenClaw] API Error ({response.status_code}): {response.text}")
+                        logger.error(
+                            "[OpenClaw] API Error status=%s",
+                            response.status_code,
+                        )
                         yield {"type": "error", "content": f"OpenClaw API Error: {response.status_code}"}
                         return
                     
@@ -231,6 +272,9 @@ class OpenClawClient:
                             yield {"type": "answer", "content": content}
 
 
-        except Exception as e:
-            logger.exception(f"[OpenClaw] Stream error: {str(e)}")
-            yield {"type": "error", "content": f"Connection to OpenClaw failed: {str(e)}"}
+        except Exception as exc:
+            logger.error("[OpenClaw] Stream failed: %s", type(exc).__name__)
+            yield {
+                "type": "error",
+                "content": "Connection to OpenClaw failed.",
+            }

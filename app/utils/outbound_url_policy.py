@@ -4,7 +4,7 @@ import asyncio
 import ipaddress
 import socket
 from dataclasses import dataclass
-from typing import Iterable, Optional
+from typing import Iterable, Optional, Union
 from urllib.parse import urljoin, urlsplit, urlunsplit
 
 import httpx
@@ -18,6 +18,15 @@ _CROSS_ORIGIN_REDIRECT_HEADER_ALLOWLIST = {
     "range",
     "user-agent",
 }
+_APPROVABLE_PRIVATE_NETWORKS = (
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+    ipaddress.ip_network("fc00::/7"),
+)
+
+IpNetwork = Union[ipaddress.IPv4Network, ipaddress.IPv6Network]
+IpAddress = Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
 
 
 class OutboundUrlPolicyError(ValueError):
@@ -35,7 +44,21 @@ class ResolvedOutboundTarget:
     connect_address: str
 
 
-def _validate_ip_address(address: str) -> None:
+@dataclass(frozen=True)
+class PrivateNetworkAccessPolicy:
+    """Deployment-owned approval for one integration's exact private targets."""
+
+    allowed_hosts: frozenset[str]
+    allowed_networks: tuple[IpNetwork, ...]
+
+    def allows(self, hostname: str, address: IpAddress) -> bool:
+        return (
+            _normalize_policy_hostname(hostname) in self.allowed_hosts
+            and any(address in network for network in self.allowed_networks)
+        )
+
+
+def _effective_ip_address(address: str) -> IpAddress:
     try:
         ip = ipaddress.ip_address(address.split("%", 1)[0])
     except ValueError as exc:
@@ -43,11 +66,109 @@ def _validate_ip_address(address: str) -> None:
 
     if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
         ip = ip.ipv4_mapped
+    return ip
+
+
+def _normalize_policy_hostname(hostname: str) -> str:
+    normalized = str(hostname or "").strip().rstrip(".").lower()
+    if normalized.startswith("[") and normalized.endswith("]"):
+        normalized = normalized[1:-1]
+    if (
+        not normalized
+        or normalized == "localhost"
+        or normalized.endswith(".localhost")
+        or any(char in normalized for char in ("*", "/", "\\", "@", "?", "#"))
+        or any(ord(char) < 32 or ord(char) == 127 for char in normalized)
+    ):
+        raise OutboundUrlPolicyError("私网审批 Host 格式无效")
+    try:
+        return str(ipaddress.ip_address(normalized))
+    except ValueError:
+        try:
+            ascii_hostname = normalized.encode("idna").decode("ascii")
+        except UnicodeError as exc:
+            raise OutboundUrlPolicyError("私网审批 Host 的 IDNA 编码无效") from exc
+        labels = ascii_hostname.split(".")
+        if any(
+            not label
+            or len(label) > 63
+            or label.startswith("-")
+            or label.endswith("-")
+            or not label.replace("-", "").isalnum()
+            for label in labels
+        ):
+            raise OutboundUrlPolicyError("私网审批 Host 格式无效")
+        return ascii_hostname
+
+
+def create_private_network_access_policy(
+    allowed_hosts: Iterable[str],
+    allowed_cidrs: Iterable[str],
+) -> Optional[PrivateNetworkAccessPolicy]:
+    hosts = frozenset(
+        _normalize_policy_hostname(hostname)
+        for hostname in allowed_hosts
+        if str(hostname or "").strip()
+    )
+    raw_cidrs = tuple(
+        str(cidr or "").strip()
+        for cidr in allowed_cidrs
+        if str(cidr or "").strip()
+    )
+    if not hosts and not raw_cidrs:
+        return None
+    if not hosts or not raw_cidrs:
+        raise OutboundUrlPolicyError("私网出网审批必须同时配置精确 Host 和 CIDR")
+
+    networks: list[IpNetwork] = []
+    for raw_cidr in raw_cidrs:
+        try:
+            network = ipaddress.ip_network(raw_cidr, strict=False)
+        except ValueError as exc:
+            raise OutboundUrlPolicyError(f"私网审批 CIDR 格式无效: {raw_cidr}") from exc
+        if not any(
+            network.version == private_range.version
+            and network.subnet_of(private_range)
+            for private_range in _APPROVABLE_PRIVATE_NETWORKS
+        ):
+            raise OutboundUrlPolicyError(
+                "私网审批 CIDR 只允许 RFC1918 IPv4 或 IPv6 ULA 网段"
+            )
+        networks.append(network)
+
+    for hostname in hosts:
+        try:
+            literal_ip = _effective_ip_address(hostname)
+        except OutboundUrlPolicyError:
+            continue
+        if not any(literal_ip in network for network in networks):
+            raise OutboundUrlPolicyError("私网审批中的 IP Host 不属于已批准 CIDR")
+
+    return PrivateNetworkAccessPolicy(
+        allowed_hosts=hosts,
+        allowed_networks=tuple(networks),
+    )
+
+
+def _validate_ip_address(
+    address: str,
+    *,
+    hostname: str = "",
+    private_network_policy: Optional[PrivateNetworkAccessPolicy] = None,
+) -> bool:
+    ip = _effective_ip_address(address)
     if not ip.is_global:
-        raise OutboundUrlPolicyError("目标地址不是公网地址")
+        if private_network_policy and private_network_policy.allows(hostname, ip):
+            return True
+        raise OutboundUrlPolicyError("目标地址不是公网地址或未通过私网审批")
+    return False
 
 
-def validate_outbound_http_url(url: str) -> str:
+def validate_outbound_http_url(
+    url: str,
+    *,
+    private_network_policy: Optional[PrivateNetworkAccessPolicy] = None,
+) -> str:
     normalized = str(url or "").strip()
     if any(ord(char) < 32 or ord(char) == 127 for char in normalized):
         raise OutboundUrlPolicyError("目标 URL 不允许包含控制字符")
@@ -83,7 +204,11 @@ def validate_outbound_http_url(url: str) -> str:
         except UnicodeError as exc:
             raise OutboundUrlPolicyError("目标主机名 IDNA 编码无效") from exc
     else:
-        _validate_ip_address(hostname)
+        _validate_ip_address(
+            hostname,
+            hostname=hostname,
+            private_network_policy=private_network_policy,
+        )
 
     default_port = 443 if parsed.scheme.lower() == "https" else 80
     netloc = f"[{hostname}]" if ":" in hostname else hostname
@@ -92,12 +217,25 @@ def validate_outbound_http_url(url: str) -> str:
     return urlunsplit((parsed.scheme.lower(), netloc, parsed.path or "/", parsed.query, ""))
 
 
-def validate_resolved_addresses(addresses: Iterable[str]) -> None:
+def validate_resolved_addresses(
+    addresses: Iterable[str],
+    *,
+    hostname: str = "",
+    private_network_policy: Optional[PrivateNetworkAccessPolicy] = None,
+) -> None:
     resolved = list(dict.fromkeys(addresses))
     if not resolved:
         raise OutboundUrlPolicyError("目标主机没有可用 DNS 解析结果")
-    for address in resolved:
-        _validate_ip_address(address)
+    private_results = {
+        _validate_ip_address(
+            address,
+            hostname=hostname,
+            private_network_policy=private_network_policy,
+        )
+        for address in resolved
+    }
+    if len(private_results) > 1:
+        raise OutboundUrlPolicyError("目标主机不允许同时解析到公网和私网地址")
 
 
 def _deduplicate_addresses(addresses: Iterable[str]) -> tuple[str, ...]:
@@ -119,8 +257,15 @@ def _ordered_connect_addresses(addresses: tuple[str, ...]) -> tuple[str, ...]:
     ))
 
 
-async def resolve_outbound_target(url: str) -> ResolvedOutboundTarget:
-    normalized = validate_outbound_http_url(url)
+async def resolve_outbound_target(
+    url: str,
+    *,
+    private_network_policy: Optional[PrivateNetworkAccessPolicy] = None,
+) -> ResolvedOutboundTarget:
+    normalized = validate_outbound_http_url(
+        url,
+        private_network_policy=private_network_policy,
+    )
     parsed = urlsplit(normalized)
     port = parsed.port or (443 if parsed.scheme == "https" else 80)
     hostname = parsed.hostname or ""
@@ -145,7 +290,11 @@ async def resolve_outbound_target(url: str) -> ResolvedOutboundTarget:
     else:
         addresses = (str(literal_ip),)
 
-    validate_resolved_addresses(addresses)
+    validate_resolved_addresses(
+        addresses,
+        hostname=hostname,
+        private_network_policy=private_network_policy,
+    )
     return ResolvedOutboundTarget(
         url=normalized,
         hostname=hostname,
@@ -155,8 +304,17 @@ async def resolve_outbound_target(url: str) -> ResolvedOutboundTarget:
     )
 
 
-async def validate_outbound_url(url: str) -> str:
-    return (await resolve_outbound_target(url)).url
+async def validate_outbound_url(
+    url: str,
+    *,
+    private_network_policy: Optional[PrivateNetworkAccessPolicy] = None,
+) -> str:
+    return (
+        await resolve_outbound_target(
+            url,
+            private_network_policy=private_network_policy,
+        )
+    ).url
 
 
 def _original_host_header(target: ResolvedOutboundTarget, scheme: str) -> str:
@@ -165,14 +323,29 @@ def _original_host_header(target: ResolvedOutboundTarget, scheme: str) -> str:
     return hostname if target.port == default_port else f"{hostname}:{target.port}"
 
 
-def _outbound_authority(url: str) -> tuple[str, str, int]:
-    normalized = validate_outbound_http_url(url)
+def _outbound_authority(
+    url: str,
+    private_network_policy: Optional[PrivateNetworkAccessPolicy] = None,
+) -> tuple[str, str, int]:
+    normalized = validate_outbound_http_url(
+        url,
+        private_network_policy=private_network_policy,
+    )
     parsed = urlsplit(normalized)
     return (
         parsed.scheme,
         parsed.hostname or "",
         parsed.port or (443 if parsed.scheme == "https" else 80),
     )
+
+
+def outbound_url_origin(
+    url: str,
+    *,
+    private_network_policy: Optional[PrivateNetworkAccessPolicy] = None,
+) -> tuple[str, str, int]:
+    """Return a normalized Origin tuple under the active outbound policy."""
+    return _outbound_authority(url, private_network_policy)
 
 
 def redact_outbound_url_for_log(url: str) -> str:
@@ -215,11 +388,17 @@ class ResolvedIPTransport(httpx.AsyncBaseTransport):
         self,
         *,
         allowed_url: Optional[str] = None,
+        private_network_policy: Optional[PrivateNetworkAccessPolicy] = None,
         transport: Optional[httpx.AsyncBaseTransport] = None,
     ) -> None:
+        if private_network_policy is not None and allowed_url is None:
+            raise ValueError("私网出网策略必须绑定 allowed_url")
         self._allowed_authority = (
-            _outbound_authority(allowed_url) if allowed_url is not None else None
+            _outbound_authority(allowed_url, private_network_policy)
+            if allowed_url is not None
+            else None
         )
+        self._private_network_policy = private_network_policy
         self._test_transport = transport
         self._transports: dict[
             tuple[str, str, int, str],
@@ -256,10 +435,16 @@ class ResolvedIPTransport(httpx.AsyncBaseTransport):
     async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
         if (
             self._allowed_authority is not None
-            and _outbound_authority(str(request.url)) != self._allowed_authority
+            and _outbound_authority(
+                str(request.url),
+                self._private_network_policy,
+            ) != self._allowed_authority
         ):
-            raise OutboundUrlPolicyError("MCP 后续请求不允许跨 Origin")
-        target = await resolve_outbound_target(str(request.url))
+            raise OutboundUrlPolicyError("后续请求不允许跨 Origin")
+        target = await resolve_outbound_target(
+            str(request.url),
+            private_network_policy=self._private_network_policy,
+        )
         last_connect_error: Optional[Exception] = None
         for connect_address in _ordered_connect_addresses(target.addresses):
             transport = await self._transport_for(
@@ -292,9 +477,12 @@ class ResolvedIPTransport(httpx.AsyncBaseTransport):
 def create_ssrf_safe_async_client(
     *,
     allowed_url: Optional[str] = None,
+    private_network_policy: Optional[PrivateNetworkAccessPolicy] = None,
     **kwargs,
 ) -> httpx.AsyncClient:
     """Build an HTTP client that cannot re-resolve a verified host at connect time."""
+    if private_network_policy is not None and allowed_url is None:
+        raise ValueError("私网出网策略必须绑定 allowed_url")
     if kwargs.get("follow_redirects"):
         raise ValueError("SSRF 安全客户端不允许自动重定向")
     if kwargs.get("transport") is not None:
@@ -309,7 +497,10 @@ def create_ssrf_safe_async_client(
         raise ValueError("SSRF 安全客户端不允许旁路固定解析 Transport")
     kwargs["follow_redirects"] = False
     kwargs["trust_env"] = False
-    kwargs["transport"] = ResolvedIPTransport(allowed_url=allowed_url)
+    kwargs["transport"] = ResolvedIPTransport(
+        allowed_url=allowed_url,
+        private_network_policy=private_network_policy,
+    )
     return httpx.AsyncClient(**kwargs)
 
 

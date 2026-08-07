@@ -4,6 +4,11 @@ from typing import AsyncGenerator, Dict, List, Optional, Any
 import httpx
 
 from app.services.config_service import ConfigService
+from app.utils.integration_outbound import (
+    create_integration_outbound_client,
+    integration_urls_share_origin,
+)
+from app.utils.outbound_url_policy import redact_outbound_url_for_log
 
 logger = logging.getLogger(__name__)
 
@@ -27,13 +32,27 @@ class RagFlowClient:
 
     async def _ensure_config(self):
         """Lazy load configuration"""
+        configured_url = await ConfigService.get(f"{self.config_prefix}_api_url")
         if not self.base_url:
-            self.base_url = await ConfigService.get(f"{self.config_prefix}_api_url")
+            self.base_url = configured_url
             if self.base_url and self.base_url.endswith("/"):
                 self.base_url = self.base_url[:-1]
-        
+
         if not self.api_key:
-            self.api_key = await ConfigService.get(f"{self.config_prefix}_api_key")
+            configured_key = await ConfigService.get(f"{self.config_prefix}_api_key")
+            if configured_key and (
+                not self.base_url
+                or not configured_url
+                or not integration_urls_share_origin(
+                    "ragflow",
+                    self.base_url,
+                    configured_url,
+                )
+            ):
+                raise ValueError(
+                    "RAGFlow 已保存的 API Key 不能发送到其他 Origin"
+                )
+            self.api_key = configured_key
             
         if not self.base_url or not self.api_key:
             raise ValueError(f"RAGFlow configuration ({self.config_prefix}_api_url, {self.config_prefix}_api_key) is missing.")
@@ -74,6 +93,14 @@ class RagFlowClient:
             "Content-Type": "application/json"
         }
 
+    @staticmethod
+    def _create_http_client(url: str, *, timeout: float) -> httpx.AsyncClient:
+        return create_integration_outbound_client(
+            "ragflow",
+            allowed_url=url,
+            timeout=timeout,
+        )
+
     # --- Dataset Management ---
 
     async def list_datasets(self, name: Optional[str] = None, page: int = 1, page_size: int = 100) -> List[Dict[str, Any]]:
@@ -84,7 +111,7 @@ class RagFlowClient:
         # RAGFlow limits page_size to <= 100. If larger, we fetch multiple pages of max size 100
         if page_size <= 100:
             params = {"page": page, "page_size": page_size}
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with self._create_http_client(url, timeout=10.0) as client:
                 resp = await client.get(url, headers=self._get_headers(), params=params)
                 data = await self._handle_response(resp, "List Datasets")
                 
@@ -103,7 +130,7 @@ class RagFlowClient:
             start_page = (start_offset // ragflow_page_size) + 1
             end_page = ((end_offset - 1) // ragflow_page_size) + 1
             
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with self._create_http_client(url, timeout=10.0) as client:
                 for p in range(start_page, end_page + 1):
                     params = {"page": p, "page_size": ragflow_page_size}
                     resp = await client.get(url, headers=self._get_headers(), params=params)
@@ -150,7 +177,7 @@ class RagFlowClient:
                 "layout_recognize": "DeepDOC",
             }
 
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with self._create_http_client(url, timeout=10.0) as client:
             resp = await client.post(url, headers=self._get_headers(), json=payload)
             return await self._handle_response(resp, "Create Dataset")
 
@@ -160,7 +187,7 @@ class RagFlowClient:
         url = f"{self.base_url}/api/v1/datasets"
         payload = {"ids": dataset_ids}
         
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with self._create_http_client(url, timeout=10.0) as client:
             resp = await client.request("DELETE", url, headers=self._get_headers(), json=payload)
             await self._handle_response(resp, "Delete Datasets")
 
@@ -177,7 +204,7 @@ class RagFlowClient:
             if name:
                 params["name"] = name
                 
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with self._create_http_client(url, timeout=10.0) as client:
                 resp = await client.get(url, headers=self._get_headers(), params=params)
                 data = await self._handle_response(resp, "List Documents")
                 if isinstance(data, list):
@@ -194,7 +221,7 @@ class RagFlowClient:
             start_page = (start_offset // ragflow_page_size) + 1
             end_page = ((end_offset - 1) // ragflow_page_size) + 1
             
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with self._create_http_client(url, timeout=10.0) as client:
                 for p in range(start_page, end_page + 1):
                     params = {"page": p, "page_size": ragflow_page_size}
                     if name:
@@ -233,7 +260,7 @@ class RagFlowClient:
         headers = {"Authorization": f"Bearer {self.api_key}"}
         files = {"file": (file_name, blob, content_type or "application/octet-stream")}
         
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with self._create_http_client(url, timeout=30.0) as client:
             resp = await client.post(url, headers=headers, files=files)
             # Returns a list of uploaded docs in data
             data = await self._handle_response(resp, "Upload Document")
@@ -245,7 +272,7 @@ class RagFlowClient:
         url = f"{self.base_url}/api/v1/datasets/{dataset_id}/documents"
         payload = {"ids": document_ids}
         
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with self._create_http_client(url, timeout=10.0) as client:
             # Note: The API spec shows DELETE /api/v1/datasets/{dataset_id}/documents takes Body with ids
             # We need to verify if httpx.delete supports body or we use client.request
             resp = await client.request("DELETE", url, headers=self._get_headers(), json=payload)
@@ -257,7 +284,7 @@ class RagFlowClient:
         url = f"{self.base_url}/api/v1/datasets/{dataset_id}/chunks"
         payload = {"document_ids": document_ids}
         
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with self._create_http_client(url, timeout=10.0) as client:
             resp = await client.post(url, headers=self._get_headers(), json=payload)
             await self._handle_response(resp, "Parse Documents")
 
@@ -275,7 +302,7 @@ class RagFlowClient:
         # RAGFlow limits page_size to <= 100. If larger, we fetch multiple pages of max size 100
         if page_size <= 100:
             params = {"page": page, "page_size": page_size}
-            async with httpx.AsyncClient(timeout=20.0) as client:
+            async with self._create_http_client(url, timeout=20.0) as client:
                 resp = await client.get(url, headers=self._get_headers(), params=params)
                 return await self._handle_response(resp, "List Chunks")
         else:
@@ -288,7 +315,7 @@ class RagFlowClient:
             start_page = (start_offset // ragflow_page_size) + 1
             end_page = ((end_offset - 1) // ragflow_page_size) + 1
             
-            async with httpx.AsyncClient(timeout=20.0) as client:
+            async with self._create_http_client(url, timeout=20.0) as client:
                 for p in range(start_page, end_page + 1):
                     params = {"page": p, "page_size": ragflow_page_size}
                     resp = await client.get(url, headers=self._get_headers(), params=params)
@@ -358,9 +385,12 @@ class RagFlowClient:
         if "temperature" in config:
             payload["temperature"] = config["temperature"]
 
-        logger.info(f"[RAGFlow OpenAI-Compatible] Request: {url}")
+        logger.info(
+            "[RAGFlow OpenAI-Compatible] Request Origin: %s",
+            redact_outbound_url_for_log(url),
+        )
 
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with self._create_http_client(url, timeout=60.0) as client:
             try:
                 async with client.stream("POST", url, headers=self._get_headers(), json=payload) as response:
                     if response.status_code != 200:
@@ -497,7 +527,7 @@ class RagFlowClient:
 
         for attempt in range(1, max_attempts + 1):
             try:
-                async with httpx.AsyncClient(timeout=timeout_val) as client:
+                async with self._create_http_client(url, timeout=timeout_val) as client:
                     response = await client.post(url, headers=self._get_headers(), json=payload)
                     
                     if response.status_code == 200:
@@ -586,7 +616,7 @@ class RagFlowClient:
         else:
             url = f"{self.base_url}/api/v1/document/get/{document_id}"
 
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with self._create_http_client(url, timeout=60.0) as client:
             resp = await client.get(url, headers=self._get_headers())
             if resp.status_code == 200:
                 content_type = resp.headers.get("content-type", "application/octet-stream")

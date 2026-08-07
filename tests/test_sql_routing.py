@@ -6,6 +6,17 @@ from app.services.data_adapter.sqlserver import SQLServerAdapter
 
 pytestmark = pytest.mark.no_infrastructure
 
+
+class _AsyncClientContext:
+    def __init__(self, client):
+        self.client = client
+
+    async def __aenter__(self):
+        return self.client
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        return None
+
 @pytest.mark.asyncio
 async def test_sql_routing_forced_env_local():
     """验证当环境变量 SQL_EXECUTION_MODE=local 时，强制分流到本地模式，不发起 HTTP 请求"""
@@ -17,7 +28,7 @@ async def test_sql_routing_forced_env_local():
     with patch.dict("os.environ", {"SQL_EXECUTION_MODE": "local"}), \
          patch("app.services.data_adapter.factory.get_adapter", return_value=mock_adapter) as mock_get_adapter, \
          patch("app.core.redis.get_redis", return_value=None), \
-         patch("app.core.http_client.GlobalHttpClient.get_client") as mock_get_http_client:
+         patch("app.services.ai.tools.data_api.create_integration_outbound_client") as mock_get_http_client:
          
         res = await call_external_sql_api(sql, data_source="mysql_test")
         
@@ -79,7 +90,10 @@ async def test_sql_routing_forced_env_remote():
          patch("app.services.config_service.ConfigService.get", side_effect=lambda key, **kw: "local" if key == "sql_execution_mode" else ("60.0" if key == "data_api_timeout_seconds" else "http://remote/api")), \
          patch("app.services.data_adapter.factory.get_adapter") as mock_get_adapter, \
          patch("app.core.redis.get_redis", return_value=None), \
-         patch("app.core.http_client.GlobalHttpClient.get_client", return_value=mock_http_client):
+         patch(
+             "app.services.ai.tools.data_api.create_integration_outbound_client",
+             return_value=_AsyncClientContext(mock_http_client),
+         ):
          
         res = await call_external_sql_api(sql, data_source="mysql_test")
         
@@ -105,7 +119,7 @@ async def test_sql_routing_fallback_to_db_local():
          patch("app.services.config_service.ConfigService.get", side_effect=lambda key, **kw: "local" if key == "sql_execution_mode" else ("60.0" if key == "data_api_timeout_seconds" else "http://remote/api")), \
          patch("app.services.data_adapter.factory.get_adapter", return_value=mock_adapter) as mock_get_adapter, \
          patch("app.core.redis.get_redis", return_value=None), \
-         patch("app.core.http_client.GlobalHttpClient.get_client") as mock_get_http_client:
+         patch("app.services.ai.tools.data_api.create_integration_outbound_client") as mock_get_http_client:
          
         res = await call_external_sql_api(sql, data_source="mysql_test")
         
@@ -132,7 +146,10 @@ async def test_sql_routing_invalid_db_config_fallback_remote():
          patch("app.services.config_service.ConfigService.get", side_effect=lambda key, **kw: "invalid_mode" if key == "sql_execution_mode" else ("60.0" if key == "data_api_timeout_seconds" else "http://remote/api")), \
          patch("app.services.data_adapter.factory.get_adapter") as mock_get_adapter, \
          patch("app.core.redis.get_redis", return_value=None), \
-         patch("app.core.http_client.GlobalHttpClient.get_client", return_value=mock_http_client):
+         patch(
+             "app.services.ai.tools.data_api.create_integration_outbound_client",
+             return_value=_AsyncClientContext(mock_http_client),
+         ):
          
         res = await call_external_sql_api(sql, data_source="mysql_test")
         
@@ -184,7 +201,10 @@ async def test_sql_routing_cache_key_includes_execution_mode():
     with patch("app.core.redis.get_redis", return_value=FakeRedis()), \
          patch("app.services.config_service.ConfigService.get", side_effect=lambda key, **kw: "60.0" if key == "data_api_timeout_seconds" else "http://remote/api"), \
          patch("app.services.data_adapter.factory.get_adapter", return_value=local_adapter), \
-         patch("app.core.http_client.GlobalHttpClient.get_client", return_value=remote_client):
+         patch(
+             "app.services.ai.tools.data_api.create_integration_outbound_client",
+             return_value=_AsyncClientContext(remote_client),
+         ):
         with patch.dict("os.environ", {"SQL_EXECUTION_MODE": "remote"}):
             remote_res = json.loads(await call_external_sql_api(sql, data_source="mysql_test"))
         with patch.dict("os.environ", {"SQL_EXECUTION_MODE": "local"}):

@@ -8,6 +8,7 @@ import pytest
 from app.utils.outbound_url_policy import (
     OutboundUrlPolicyError,
     ResolvedIPTransport,
+    create_private_network_access_policy,
     create_ssrf_safe_async_client,
     get_with_ssrf_safe_redirects,
     resolve_outbound_target,
@@ -62,6 +63,155 @@ def test_outbound_url_policy_normalizes_idna_hostname():
 def test_outbound_url_policy_rejects_any_non_public_dns_answer():
     with pytest.raises(OutboundUrlPolicyError):
         validate_resolved_addresses(["93.184.216.34", "10.0.0.8"])
+
+
+def test_private_policy_requires_both_exact_hosts_and_cidrs():
+    with pytest.raises(OutboundUrlPolicyError, match="同时配置"):
+        create_private_network_access_policy(["ragflow.internal"], [])
+    with pytest.raises(OutboundUrlPolicyError, match="同时配置"):
+        create_private_network_access_policy([], ["10.20.0.0/16"])
+
+
+@pytest.mark.parametrize(
+    "cidr",
+    [
+        "0.0.0.0/0",
+        "127.0.0.0/8",
+        "169.254.0.0/16",
+        "::/0",
+        "fe80::/10",
+    ],
+)
+def test_private_policy_rejects_broad_or_special_networks(cidr):
+    with pytest.raises(OutboundUrlPolicyError, match="RFC1918|ULA"):
+        create_private_network_access_policy(["ragflow.internal"], [cidr])
+
+
+def test_private_policy_rejects_wildcard_and_localhost_hosts():
+    for host in ("*.internal", "localhost", "ragflow.localhost"):
+        with pytest.raises(OutboundUrlPolicyError, match="Host"):
+            create_private_network_access_policy([host], ["10.20.0.0/16"])
+
+
+def test_private_policy_allows_exact_host_inside_approved_cidr(monkeypatch):
+    def fake_getaddrinfo(host, port, *, type):
+        assert host == "ragflow.internal"
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("10.20.1.8", port))]
+
+    monkeypatch.setattr(socket, "getaddrinfo", fake_getaddrinfo)
+    policy = create_private_network_access_policy(
+        ["ragflow.internal"],
+        ["10.20.0.0/16"],
+    )
+
+    target = asyncio.run(
+        resolve_outbound_target(
+            "http://ragflow.internal:9380/api/v1/datasets",
+            private_network_policy=policy,
+        )
+    )
+
+    assert target.connect_address == "10.20.1.8"
+    assert target.hostname == "ragflow.internal"
+
+
+def test_private_transport_pins_approved_target_and_retains_origin(monkeypatch):
+    def fake_getaddrinfo(host, port, *, type):
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("10.20.1.8", port))]
+
+    monkeypatch.setattr(socket, "getaddrinfo", fake_getaddrinfo)
+    policy = create_private_network_access_policy(
+        ["ragflow.internal", "other.internal"],
+        ["10.20.0.0/16"],
+    )
+    capture = _CaptureTransport()
+    transport = ResolvedIPTransport(
+        allowed_url="http://ragflow.internal:9380/api",
+        private_network_policy=policy,
+        transport=capture,
+    )
+
+    response = asyncio.run(
+        transport.handle_async_request(
+            httpx.Request(
+                "POST",
+                "http://ragflow.internal:9380/api/v1/retrieval",
+                content=b"{}",
+            )
+        )
+    )
+
+    assert response.status_code == 200
+    pinned = capture.requests[0]
+    assert pinned.url.host == "10.20.1.8"
+    assert pinned.headers["host"] == "ragflow.internal:9380"
+
+    with pytest.raises(OutboundUrlPolicyError, match="跨 Origin"):
+        asyncio.run(
+            transport.handle_async_request(
+                httpx.Request("GET", "http://other.internal:9380/api")
+            )
+        )
+
+
+def test_private_policy_rejects_unapproved_host_before_network(monkeypatch):
+    def fake_getaddrinfo(host, port, *, type):
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("10.20.1.8", port))]
+
+    monkeypatch.setattr(socket, "getaddrinfo", fake_getaddrinfo)
+    policy = create_private_network_access_policy(
+        ["ragflow.internal"],
+        ["10.20.0.0/16"],
+    )
+
+    with pytest.raises(OutboundUrlPolicyError, match="私网审批"):
+        asyncio.run(
+            resolve_outbound_target(
+                "http://attacker.internal:9380/api",
+                private_network_policy=policy,
+            )
+        )
+
+
+def test_private_policy_rejects_address_outside_approved_cidr(monkeypatch):
+    def fake_getaddrinfo(host, port, *, type):
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("10.30.1.8", port))]
+
+    monkeypatch.setattr(socket, "getaddrinfo", fake_getaddrinfo)
+    policy = create_private_network_access_policy(
+        ["ragflow.internal"],
+        ["10.20.0.0/16"],
+    )
+
+    with pytest.raises(OutboundUrlPolicyError, match="私网审批"):
+        asyncio.run(
+            resolve_outbound_target(
+                "http://ragflow.internal:9380/api",
+                private_network_policy=policy,
+            )
+        )
+
+
+def test_private_policy_rejects_mixed_public_and_private_dns(monkeypatch):
+    def fake_getaddrinfo(host, port, *, type):
+        return [
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("10.20.1.8", port)),
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", port)),
+        ]
+
+    monkeypatch.setattr(socket, "getaddrinfo", fake_getaddrinfo)
+    policy = create_private_network_access_policy(
+        ["ragflow.internal"],
+        ["10.20.0.0/16"],
+    )
+
+    with pytest.raises(OutboundUrlPolicyError, match="同时解析"):
+        asyncio.run(
+            resolve_outbound_target(
+                "http://ragflow.internal:9380/api",
+                private_network_policy=policy,
+            )
+        )
 
 
 def test_outbound_url_policy_checks_dns_results(monkeypatch):
@@ -246,6 +396,12 @@ def test_ssrf_safe_client_cannot_enable_redirects_or_override_transport():
         create_ssrf_safe_async_client(
             mounts={"https://": httpx.MockTransport(lambda request: None)}
         )
+    private_policy = create_private_network_access_policy(
+        ["ragflow.internal"],
+        ["10.20.0.0/16"],
+    )
+    with pytest.raises(ValueError, match="绑定 allowed_url"):
+        create_ssrf_safe_async_client(private_network_policy=private_policy)
 
     client = create_ssrf_safe_async_client(timeout=1.0)
     try:

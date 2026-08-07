@@ -75,8 +75,10 @@ Webhook 接入固定解析 Client；动态 URL 模板不得修改 Origin，模�
 `localhost:11434` 是代码限定的唯一私网例外。
 
 `NET-C` 已将 SSO 登录和管理员用户目录同步接入固定解析并做稳定错误映射。
-剩余出网治理：RAGFlow、OpenClaw、External SQL、AgentScope 模型 SDK 和 SMTP；这些路径
-需要显式内网 Host/网段审批、凭据 Audience、响应字节上限、熔断/审计以及生产 egress 策略。
+`NET-D` 已将 RAGFlow、OpenClaw 和 External SQL HTTP 网关接入集成专属固定解析；合法私网
+目标必须同时命中部署侧精确 Host 与 CIDR，凭据绑定 Origin，且三个集成不能复用审批范围。
+剩余出网治理：数据库原生协议、AgentScope 模型 SDK 和 SMTP，以及响应字节上限、熔断/
+审计和生产 egress 策略。
 
 ## 7. 工具治理目标
 

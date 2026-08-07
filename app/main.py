@@ -57,10 +57,6 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logging.error(f"Failed to initialize Oracle Thick Mode: {e}")
 
-    # Initialize Global HTTP Client
-    from app.core.http_client import GlobalHttpClient
-    await GlobalHttpClient.get_client()
-    
     # Platform timezone cache (before scheduler)
     try:
         from app.services.platform_timezone import refresh_platform_timezone
@@ -89,7 +85,6 @@ async def lifespan(app: FastAPI):
     runtime_health.begin_draining()
     from app.services.ai.scheduler_service import scheduler_service
     await scheduler_service.stop()
-    await GlobalHttpClient.close()
     await AuditService.stop_worker()
     from app.services.pool_manager import DataSourcePoolManager
     await DataSourcePoolManager.close_all_pools()

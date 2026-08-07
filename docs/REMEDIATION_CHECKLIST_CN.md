@@ -52,7 +52,7 @@
 |---|---|---|
 | AUTH-P0-02 | 第三方跨域 Embed 仍需要短期、限受众 Embed Token 签发/撤销服务 | 新增 Token 表/签发接口、Origin/Agent 绑定、TTL、撤销和审计后再开放生产跨域嵌入 |
 | SEC-P0-02 | 代码执行当前只做了权限止血，执行进程仍在平台边界内 | 独立 Worker/Queue，非 root、只读根、无 Secret、网络/CPU/内存/PID/超时策略 |
-| NET-P0-02 | MCP、用户 HTTP 工具、公开网页抓取、Generic API、模型发现/Embedding、HTTP Webhook 和 SSO 已接入固定解析；动态浏览器任意 URL 已 fail-closed。RAGFlow、OpenClaw、External SQL、AgentScope 模型 SDK、SMTP 及生产网络层仍待治理 | 为受信内网集成建立显式 Host/网段审批与凭据 Audience；Browser Worker、egress proxy/NetworkPolicy、SMTP 固定解析和跨协议重绑定演练 |
+| NET-P0-02 | MCP、用户 HTTP 工具、公开网页抓取、Generic API、模型发现/Embedding、HTTP Webhook、SSO、RAGFlow、OpenClaw 和 External SQL HTTP 网关已接入固定解析；受控私网目标要求集成专属精确 Host + CIDR 双重审批。动态浏览器任意 URL 已 fail-closed；数据库原生协议、AgentScope 模型 SDK、SMTP 及生产网络层仍待治理 | 将 Host/CIDR 审批纳入部署变更和审计；继续完成数据库/SMTP 固定解析、Browser Worker、egress proxy/NetworkPolicy、响应字节上限和跨协议重绑定演练 |
 
 ## 四、产品与平台完善（2-9 个月）
 
@@ -105,3 +105,5 @@
 | 2026-08-07 | NET-B 验证 | Python 3.11 固定解析、重定向、可配置出网、MCP 与凭据安全契约 65 项通过；迁移契约 19 项、`tests/frontend` 全量 320 项通过；`npm run build` 完整通过（10,386 个模块），本批变更 Python 文件编译和 `git diff --check` 通过。本机缺少 `aiomysql`、MCP SDK 和完整 Python 3.11 原生依赖，工具/模型 API 集成测试已更新但需标准 CI 回归；未连接真实外部服务、数据库或执行部署 |
 | 2026-08-07 | NET-C（SSO） | SSO 登录和管理员用户目录同步统一接入固定解析 Client，禁止环境代理、自动重定向和非公网目标；用户目录调用改为异步并在远端故障时 fail-closed；登录错误不再向未认证调用者回显底层连接信息；修复用户状态被尾逗号转换为元组的问题 |
 | 2026-08-07 | NET-C（SSO）验证 | Python 3.11 出网与 SSO 核心安全契约 67 项通过，Python 3.9 离线 SSO 用户目录单测 1 项通过；本批变更 Python 文件编译和 `git diff --check` 通过；未连接真实 SSO、数据库或启动服务 |
+| 2026-08-07 | NET-D（受控内网集成） | 统一出网策略新增集成专属私网审批：精确 Host 与 RFC1918/IPv6 ULA CIDR 必须同时匹配，全部 DNS 结果逐个校验并固定解析，禁止公网/私网混合结果、Loopback、Link-local、通配 Host、跨 Origin 和无 Origin 绑定的私网 Client；RAGFlow、OpenClaw、External SQL HTTP 网关全部接入；删除无目标约束的全局 HTTP 单例；RAGFlow/OpenClaw 存量 Key 禁止跨 Origin 复用；日志移除查询、用户、会话、Key 前缀和远端正文 |
+| 2026-08-07 | NET-D 验证 | Python 3.11 出网、集成、MCP、凭据和 SSO 核心安全契约 82 项通过；Python 3.9 配置契约 19 项通过；本批 Python 文件编译和 `git diff --check` 通过。RAGFlow/OpenClaw/External SQL 专项测试已同步更新，但本机缺少 `aiomysql`、`psycopg`、`sqlglot` 和完整 Python 3.11 原生依赖，需标准 CI 回归；未连接真实外部服务、数据库或启动部署 |

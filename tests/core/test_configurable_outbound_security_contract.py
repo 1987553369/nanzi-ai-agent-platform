@@ -43,6 +43,42 @@ def test_notification_and_scheduler_paths_have_no_direct_http_client():
         assert "httpx.AsyncClient(" not in _source(path), path
 
 
+def test_managed_integrations_use_scoped_outbound_clients():
+    for path in (
+        "app/services/ai/ragflow_client.py",
+        "app/services/ai/openclaw_client.py",
+        "app/services/ai/tools/data_api.py",
+        "app/api/portal/endpoints/ragflow.py",
+    ):
+        source = _source(path)
+        assert "create_integration_outbound_client" in source, path
+        assert "httpx.AsyncClient(" not in source, path
+
+    assert not (ROOT / "app/core/http_client.py").exists()
+
+
+def test_managed_integration_secrets_are_origin_bound():
+    ragflow_source = _source("app/services/ai/ragflow_client.py")
+    openclaw_source = _source("app/services/ai/openclaw_client.py")
+    portal_source = _source("app/api/portal/endpoints/ragflow.py")
+
+    assert "integration_urls_share_origin" in ragflow_source
+    assert "不能发送到其他 Origin" in ragflow_source
+    assert "integration_urls_share_origin" in openclaw_source
+    assert "integration_urls_share_origin" in portal_source
+    assert "不能发送到其他 Origin" in portal_source
+
+
+def test_managed_integration_logs_omit_request_secrets_and_values():
+    data_api_source = _source("app/services/ai/tools/data_api.py")
+    openclaw_source = _source("app/services/ai/openclaw_client.py")
+
+    assert "RAGFlow Headers: Authorization" not in data_api_source
+    assert "RAGFlow Payload:" not in data_api_source
+    assert '"user": payload.get("user")' not in openclaw_source
+    assert '"conversation_id": payload.get("conversation_id")' not in openclaw_source
+
+
 def test_dynamic_browser_url_entry_is_fail_closed_until_isolated():
     source = _source("app/services/ai/tools/advanced_auxiliary_tools.py")
     assert "动态浏览器抓取暂未开放" in source

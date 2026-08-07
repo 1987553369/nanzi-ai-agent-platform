@@ -4,11 +4,22 @@ import asyncio
 from unittest.mock import MagicMock, patch, AsyncMock
 from app.services.ai.tools.data_api import call_external_sql_api
 
+
+class _AsyncClientContext:
+    def __init__(self, client):
+        self.client = client
+
+    async def __aenter__(self):
+        return self.client
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        return None
+
 @pytest.mark.asyncio
 async def test_call_external_sql_api_optimization():
     # Mock Dependencies
     with patch("app.services.config_service.ConfigService.get", new_callable=AsyncMock) as mock_config_get, \
-         patch("app.core.http_client.GlobalHttpClient.get_client", new_callable=AsyncMock) as mock_get_client, \
+         patch("app.services.ai.tools.data_api.create_integration_outbound_client") as mock_get_client, \
          patch("app.core.redis.get_redis", new_callable=AsyncMock) as mock_get_redis:
 
         # 1. Setup Configuration Mocks
@@ -33,7 +44,7 @@ async def test_call_external_sql_api_optimization():
         mock_response.is_error = False
         mock_response.json.return_value = {"code": 200, "data": [{"col": "val"}]}
         mock_client.post.return_value = mock_response
-        mock_get_client.return_value = mock_client
+        mock_get_client.return_value = _AsyncClientContext(mock_client)
 
         # Execute
         result = await call_external_sql_api("SELECT * FROM test", "default_ch")

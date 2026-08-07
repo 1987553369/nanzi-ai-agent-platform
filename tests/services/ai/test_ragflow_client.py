@@ -126,6 +126,40 @@ async def test_ensure_config_missing(ragflow_client):
 
 
 @pytest.mark.asyncio
+async def test_stored_ragflow_key_cannot_follow_override_to_other_origin():
+    client = RagFlowClient(override_url="https://attacker.example/ragflow")
+
+    with patch(
+        "app.services.config_service.ConfigService.get",
+        new_callable=AsyncMock,
+    ) as mock_get:
+        mock_get.side_effect = lambda key: {
+            "ragflow_api_url": "https://ragflow.example/api",
+            "ragflow_api_key": "stored-secret",
+        }.get(key)
+
+        with pytest.raises(ValueError, match="不能发送到其他 Origin"):
+            await client._ensure_config()
+
+
+@pytest.mark.asyncio
+async def test_stored_ragflow_key_can_be_reused_on_same_origin():
+    client = RagFlowClient(override_url="https://ragflow.example/alternate")
+
+    with patch(
+        "app.services.config_service.ConfigService.get",
+        new_callable=AsyncMock,
+    ) as mock_get:
+        mock_get.side_effect = lambda key: {
+            "ragflow_api_url": "https://ragflow.example/api",
+            "ragflow_api_key": "stored-secret",
+        }.get(key)
+        await client._ensure_config()
+
+    assert client.api_key == "stored-secret"
+
+
+@pytest.mark.asyncio
 async def test_handle_response_includes_status_when_error_body_empty(ragflow_client):
     response = httpx.Response(502, content=b"")
 

@@ -33,18 +33,24 @@
 | `LLM_API_KEY` | `Optional[str]` | `None` | `app/core/config.py:47` |
 | `LLM_MODEL_NAME` | `Optional[str]` | `None` | `app/core/config.py:48` |
 | `LLM_TEMPERATURE` | `Optional[float]` | `None` | `app/core/config.py:49` |
-| `EXTERNAL_SQL_API_URL` | `Optional[str]` | `None` | `app/core/config.py:52` |
-| `EXTERNAL_SQL_API_KEY` | `Optional[str]` | `None` | `app/core/config.py:53` |
-| `METADATA_PROVIDER` | `str` | `'local'` | `app/core/config.py:56` |
-| `RAGFLOW_API_URL` | `Optional[str]` | `None` | `app/core/config.py:57` |
-| `RAGFLOW_API_KEY` | `Optional[str]` | `None` | `app/core/config.py:58` |
-| `MEMORY_BASE_HALF_LIFE` | `float` | `7.0` | `app/core/config.py:61` |
-| `MEMORY_CONSOLIDATION_THRESHOLD` | `float` | `0.82` | `app/core/config.py:62` |
-| `SSO_API_URL` | `str` | `'https://yovole.net/api/v1/user/check/login'` | `app/core/config.py:65` |
-| `SSO_ACCESS_TOKEN` | `str` | `'laplace'` | `app/core/config.py:66` |
-| `SSO_REQUEST_SYSTEM` | `str` | `'NANZI_AI_AGENT_PLATFORM'` | `app/core/config.py:67` |
-| `SSO_REQUEST_BUSINESS` | `str` | `'USER-LOGIN'` | `app/core/config.py:68` |
-| `SSO_TIMEOUT` | `int` | `30` | `app/core/config.py:69` |
+| `EXTERNAL_SQL_API_URL` | `Optional[str]` | `None` | `app/core/config.py:59` |
+| `EXTERNAL_SQL_API_KEY` | `Optional[str]` | `None` | `app/core/config.py:60` |
+| `EXTERNAL_SQL_ALLOWED_PRIVATE_HOSTS` | `List[str]` | `[]` | `app/core/config.py:61` |
+| `EXTERNAL_SQL_ALLOWED_PRIVATE_CIDRS` | `List[str]` | `[]` | `app/core/config.py:62` |
+| `METADATA_PROVIDER` | `str` | `'local'` | `app/core/config.py:65` |
+| `RAGFLOW_API_URL` | `Optional[str]` | `None` | `app/core/config.py:66` |
+| `RAGFLOW_API_KEY` | `Optional[str]` | `None` | `app/core/config.py:67` |
+| `RAGFLOW_ALLOWED_PRIVATE_HOSTS` | `List[str]` | `[]` | `app/core/config.py:68` |
+| `RAGFLOW_ALLOWED_PRIVATE_CIDRS` | `List[str]` | `[]` | `app/core/config.py:69` |
+| `OPENCLAW_ALLOWED_PRIVATE_HOSTS` | `List[str]` | `[]` | `app/core/config.py:70` |
+| `OPENCLAW_ALLOWED_PRIVATE_CIDRS` | `List[str]` | `[]` | `app/core/config.py:71` |
+| `MEMORY_BASE_HALF_LIFE` | `float` | `7.0` | `app/core/config.py:74` |
+| `MEMORY_CONSOLIDATION_THRESHOLD` | `float` | `0.82` | `app/core/config.py:75` |
+| `SSO_API_URL` | `str` | `'https://yovole.net/api/v1/user/check/login'` | `app/core/config.py:78` |
+| `SSO_ACCESS_TOKEN` | `str` | `'CHANGE_ME_SSO_ACCESS_TOKEN'` | `app/core/config.py:80` |
+| `SSO_REQUEST_SYSTEM` | `str` | `'NANZI_AI_AGENT_PLATFORM'` | `app/core/config.py:81` |
+| `SSO_REQUEST_BUSINESS` | `str` | `'USER-LOGIN'` | `app/core/config.py:82` |
+| `SSO_TIMEOUT` | `int` | `30` | `app/core/config.py:83` |
 
 ## 数据库存储的系统配置
 
