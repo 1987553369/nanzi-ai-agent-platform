@@ -38,6 +38,7 @@ def main() -> int:
         "compileall",
         "-m no_infrastructure",
         "npm ci",
+        "Pillow==11.3.0",
         "npm run build",
         "gitleaks/gitleaks-action",
         "pip-audit",

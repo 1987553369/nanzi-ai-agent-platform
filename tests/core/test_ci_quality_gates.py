@@ -72,6 +72,7 @@ def test_passing_quality_gates_are_hard_failures_and_debt_is_explicit():
         assert "continue-on-error" not in backend_steps[name]
     assert backend_steps["Capture current mypy debt"]["continue-on-error"] is True
     assert "continue-on-error" not in frontend_steps["Run strict type check and production build"]
+    assert "Pillow==11.3.0" in frontend_steps["Run frontend contract tests"]["run"]
     assert supply_steps["Generate Python dependency audit evidence"]["continue-on-error"] is True
     assert supply_steps["Generate frontend dependency audit evidence"]["continue-on-error"] is True
 
@@ -115,7 +116,7 @@ def test_runtime_and_development_dependencies_are_separated():
     runtime = (ROOT / "requirements.txt").read_text(encoding="utf-8")
     development = (ROOT / "requirements-dev.txt").read_text(encoding="utf-8")
 
-    for dependency in ("mypy", "pytest", "pytest-asyncio", "pytest-mock", "ruff"):
+    for dependency in ("mypy", "Pillow", "pytest", "pytest-asyncio", "pytest-mock", "ruff"):
         assert not re.search(rf"^{dependency}(?:[<=>\[]|$)", runtime, re.MULTILINE)
         assert re.search(rf"^{dependency}==", development, re.MULTILINE)
     assert development.startswith("-r requirements.txt")

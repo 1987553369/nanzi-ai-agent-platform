@@ -116,7 +116,7 @@ jobs:
       - name: Run frontend contract tests
         run: |
           mkdir -p reports
-          python -m pip install pytest==8.4.1
+          python -m pip install pytest==8.4.1 Pillow==11.3.0
           python -m pytest -q --confcutdir=tests/frontend tests/frontend \
             --junitxml=reports/frontend-junit.xml
 
