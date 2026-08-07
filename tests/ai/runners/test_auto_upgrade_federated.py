@@ -331,6 +331,10 @@ async def test_federated_graceful_degradation(test_config, monkeypatch):
         "app.services.ai.executors.federated_executor.AsyncSessionLocal",
         fake_db_session
     )
+    monkeypatch.setattr(
+        "app.services.ai.executors.federated_executor.load_column_term_map_for_datasets",
+        AsyncMock(return_value={}),
+    )
 
     # 实例并运行 FederatedQueryExecutor
     schema_output = "dataset: user_ds\ndata_source: mysql\n---\ndataset: hr_ds\ndata_source: clickhouse"
@@ -362,4 +366,4 @@ async def test_federated_graceful_degradation(test_config, monkeypatch):
     assert any("hr_ds" in str(w.get("details", "")) or "hr_ds" in str(w.get("content", "")) for w in warning_logs)
 
     # 验证最终总结文本被输出了
-    assert any(e.get("content") == "Analysis summary content." for e in events)
+    assert any(e.get("content") == "Analysis summary content." for e in events), events

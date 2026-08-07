@@ -1390,6 +1390,8 @@ async def test_data_agent_runner_execute_streams_agentscope_native_text(
         class Parameters(BaseModel):
             pass
 
+        formatter = OpenAIChatFormatter()
+
         async def _call_api(self, model_name, messages, tools=None, tool_choice=None, **kwargs):
             assert tools
             tool_names = [tool["function"]["name"] for tool in tools]
@@ -1445,7 +1447,6 @@ async def test_data_agent_runner_execute_streams_agentscope_native_text(
             credential=FakeCredential(),
             model="fake-native-data",
             parameters=FakeModel.Parameters(),
-            formatter=OpenAIChatFormatter(),
             stream=False,
             max_retries=0,
         ),
@@ -1509,6 +1510,8 @@ async def test_data_agent_runner_stores_successful_sql_result_for_followups(
         class Parameters(BaseModel):
             pass
 
+        formatter = OpenAIChatFormatter()
+
         async def _call_api(self, model_name, messages, tools=None, tool_choice=None, **kwargs):
             tool_results = [
                 block
@@ -1556,7 +1559,6 @@ async def test_data_agent_runner_stores_successful_sql_result_for_followups(
             credential=FakeCredential(),
             model="fake-native-data",
             parameters=FakeModel.Parameters(),
-            formatter=OpenAIChatFormatter(),
             stream=False,
             max_retries=0,
         ),
@@ -1672,6 +1674,8 @@ async def test_data_agent_runner_injects_few_shot_examples(
         class Parameters(BaseModel):
             pass
 
+        formatter = OpenAIChatFormatter()
+
         async def _call_api(self, model_name, messages, tools=None, tool_choice=None, **kwargs):
             system_text = "\n".join(
                 str(getattr(block, "text", ""))
@@ -1722,7 +1726,6 @@ async def test_data_agent_runner_injects_few_shot_examples(
             credential=FakeCredential(),
             model="fake-native-data",
             parameters=FakeModel.Parameters(),
-            formatter=OpenAIChatFormatter(),
             stream=False,
             max_retries=0,
         ),
@@ -1917,6 +1920,8 @@ async def test_data_agent_runner_rewrites_contextual_query_and_plans_schema_keyw
         class Parameters(BaseModel):
             pass
 
+        formatter = OpenAIChatFormatter()
+
         async def _call_api(self, model_name, messages, tools=None, tool_choice=None, **kwargs):
             system_text = "\n".join(
                 str(getattr(block, "text", ""))
@@ -1963,7 +1968,6 @@ async def test_data_agent_runner_rewrites_contextual_query_and_plans_schema_keyw
             credential=FakeCredential(),
             model="fake-native-data",
             parameters=FakeModel.Parameters(),
-            formatter=OpenAIChatFormatter(),
             stream=False,
             max_retries=0,
         ),
@@ -2110,6 +2114,8 @@ async def test_data_agent_runner_context_action_can_answer_without_sql(
         class Parameters(BaseModel):
             pass
 
+        formatter = OpenAIChatFormatter()
+
         async def _call_api(self, model_name, messages, tools=None, tool_choice=None, **kwargs):
             system_text = "\n".join(
                 str(getattr(block, "text", ""))
@@ -2134,7 +2140,6 @@ async def test_data_agent_runner_context_action_can_answer_without_sql(
             credential=FakeCredential(),
             model="fake-native-data",
             parameters=FakeModel.Parameters(),
-            formatter=OpenAIChatFormatter(),
             stream=False,
             max_retries=0,
         ),
@@ -2497,7 +2502,7 @@ def test_schema_binding_summary_lists_physical_tables_and_columns(data_config):
     assert "Schema Binding 摘要" in summary
     assert "HRMRESOURCE" in summary
     assert "SUPDEPID" in summary
-    assert "禁止使用未列出的字段" in summary
+    assert "禁止使用 term 或臆造" in summary
     assert "字段后括号内为类型/样例值" in summary
 
 
@@ -3465,6 +3470,7 @@ async def test_data_agent_runner_synthesizes_after_repeated_sql_gate(
     monkeypatch,
 ):
     from agentscope.credential import CredentialBase
+    from agentscope.formatter import OpenAIChatFormatter
     from agentscope.message import ToolCallBlock
     from agentscope.model import ChatModelBase, ChatResponse
 
@@ -3479,6 +3485,8 @@ async def test_data_agent_runner_synthesizes_after_repeated_sql_gate(
     class FakeModel(ChatModelBase):
         class Parameters(BaseModel):
             pass
+
+        formatter = OpenAIChatFormatter()
 
         def __init__(self, **kwargs):
             super().__init__(**kwargs)
@@ -3749,7 +3757,7 @@ async def test_sql_preflight_blocks_unknown_alias_column_before_execution(data_c
 
     assert invoked is False
     assert str(result).startswith("[TOOL_ERROR] SQL 预检失败")
-    assert '"R"."SSFB": invalid identifier' in str(result)
+    assert '"HRMRESOURCE"."SSFB": invalid identifier' in str(result)
     assert "HRMRESOURCE" in str(result)
     assert "SUPDEPID" in str(result)
 

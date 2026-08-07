@@ -400,6 +400,16 @@ def apply_sql_tool_result(
         return parsed_output, False
 
     if empty_reason:
+        if is_diag:
+            # An empty diagnostic probe is not a business answer. Keep the
+            # empty-result repair path active so the agent explores another
+            # field/value strategy instead of synthesizing a false conclusion.
+            state.empty_sql_reason = empty_reason
+            state.empty_sql_result = True
+            state.empty_sql_text = sql_text or ""
+            state.expecting_final_sql_after_diagnostic = False
+            state.diagnostic_sql_pending_final = False
+            return parsed_output, False
         if state.expecting_final_sql_after_diagnostic and not is_diag:
             from app.services.ai.empty_result_filter_diagnostic import (
                 should_escalate_empty_after_value_correction,
