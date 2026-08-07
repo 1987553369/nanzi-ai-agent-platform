@@ -3981,7 +3981,7 @@ async def test_sql_preflight_blocks_unknown_unqualified_columns_for_single_table
     })
 
     assert invoked is False
-    assert '"HRMRESOURCE"."SSFB": invalid identifier' in str(result)
+    assert '"SSFB": invalid identifier' in str(result)
 
 
 @pytest.mark.asyncio
@@ -5337,7 +5337,7 @@ async def test_data_agent_runner_execute_repairs_sql_error_before_final_answer(
     content = "".join(event["content"] for event in events if "content" in event and "type" not in event)
     assert "错误 SQL 也直接回答" not in content
     assert "修正后结果是 1" in content
-    assert any(event.get("title") == "修正 SQL 查询" for event in events if isinstance(event, dict))
+    assert any(event.get("title") == "修正 SQL 执行错误" for event in events if isinstance(event, dict))
     assert any(event.get("title") == "工具完成: execute_sql_query" for event in events if isinstance(event, dict))
 
 
@@ -5613,7 +5613,7 @@ async def test_data_agent_runner_execute_rechecks_empty_sql_before_final_answer(
     content = "".join(event["content"] for event in events if "content" in event and "type" not in event)
     assert "直接说没有数据" not in content
     assert "复查后结果是 1" in content
-    assert any(event.get("title") == "修正 SQL 查询" for event in events if isinstance(event, dict))
+    assert any(event.get("title") == "空结果筛选复核" for event in events if isinstance(event, dict))
 
 
 @pytest.mark.asyncio

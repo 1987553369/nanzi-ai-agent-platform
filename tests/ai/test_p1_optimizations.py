@@ -1,5 +1,6 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+from agentscope.formatter import OpenAIChatFormatter
 from app.services.ai.executors.knowledge_executor import KnowledgeExecutor
 from app.services.ai.intent_service import IntentResponse, IntentType
 from app.services.ai.turn_classifier import TurnClassification, TurnType, attach_turn_classification
@@ -68,6 +69,8 @@ async def test_knowledge_turn_forces_search_before_answer(chat_config):
     class FakeModel(ChatModelBase):
         class Parameters(BaseModel):
             pass
+
+        formatter = OpenAIChatFormatter()
 
         async def _call_api(self, model_name, messages, tools=None, tool_choice=None, **kwargs):
             if not any(msg.has_content_blocks("tool_result") for msg in messages):

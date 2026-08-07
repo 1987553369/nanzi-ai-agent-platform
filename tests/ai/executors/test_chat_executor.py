@@ -2,6 +2,7 @@ import pytest
 import asyncio
 from unittest.mock import MagicMock, AsyncMock, patch
 from types import SimpleNamespace
+from agentscope.formatter import OpenAIChatFormatter
 from pydantic import BaseModel
 from app.services.ai.runtime.agentscope.compat import AIMessage
 from app.services.ai.executors.assistant_executor import AssistantExecutor
@@ -307,6 +308,8 @@ async def test_general_runner_uses_agentscope_native_agent_for_runtime_tools(cha
     class FakeModel(ChatModelBase):
         class Parameters(BaseModel):
             pass
+
+        formatter = OpenAIChatFormatter()
 
         async def _call_api(self, model_name, messages, tools=None, tool_choice=None, **kwargs):
             if not any(msg.has_content_blocks("tool_result") for msg in messages):
@@ -903,6 +906,8 @@ async def test_general_runner_emits_permission_required_for_agentscope_ask_tool(
         class Parameters(BaseModel):
             pass
 
+        formatter = OpenAIChatFormatter()
+
         async def _call_api(self, model_name, messages, tools=None, tool_choice=None, **kwargs):
             return ChatResponse(
                 content=[
@@ -996,6 +1001,8 @@ async def test_general_runner_resumes_agentscope_ask_tool_after_confirmation(cha
     class FakeModel(ChatModelBase):
         class Parameters(BaseModel):
             pass
+
+        formatter = OpenAIChatFormatter()
 
         async def _call_api(self, model_name, messages, tools=None, tool_choice=None, **kwargs):
             if not any(msg.has_content_blocks("tool_result") for msg in messages):
@@ -1098,6 +1105,8 @@ async def test_agent_service_resumes_agentscope_ask_from_snapshot(chat_config):
     class FakeModel(ChatModelBase):
         class Parameters(BaseModel):
             pass
+
+        formatter = OpenAIChatFormatter()
 
         async def _call_api(self, model_name, messages, tools=None, tool_choice=None, **kwargs):
             if not any(msg.has_content_blocks("tool_result") for msg in messages):
@@ -1214,6 +1223,8 @@ async def test_permission_resume_restores_user_context_for_user_scoped_tools(cha
         class Parameters(BaseModel):
             pass
 
+        formatter = OpenAIChatFormatter()
+
         async def _call_api(self, model_name, messages, tools=None, tool_choice=None, **kwargs):
             if not any(msg.has_content_blocks("tool_result") for msg in messages):
                 return ChatResponse(
@@ -1319,6 +1330,8 @@ async def test_knowledge_runner_uses_agentscope_native_agent(chat_config):
     class FakeModel(ChatModelBase):
         class Parameters(BaseModel):
             pass
+
+        formatter = OpenAIChatFormatter()
 
         async def _call_api(self, model_name, messages, tools=None, tool_choice=None, **kwargs):
             if not any(msg.has_content_blocks("tool_result") for msg in messages):
@@ -1667,6 +1680,8 @@ async def test_knowledge_runner_with_rag_but_no_citations_intercepts_hallucinati
         class Parameters(BaseModel):
             pass
 
+        formatter = OpenAIChatFormatter()
+
         async def _call_api(self, model_name, messages, tools=None, tool_choice=None, **kwargs):
             # 模拟模型生成长文描述，但完全没有 [1] 类似的引用标签
             brain_text = "根据配置要求，您需要首先登录系统后台，在设置中心找到网络连接，输入正确的子网掩码并保存，然后再重启网卡即可。"
@@ -1738,6 +1753,8 @@ async def test_general_runner_memory_guard_uses_agentscope_native_agent(chat_con
     class FakeModel(ChatModelBase):
         class Parameters(BaseModel):
             pass
+
+        formatter = OpenAIChatFormatter()
 
         async def _call_api(self, model_name, messages, tools=None, tool_choice=None, **kwargs):
             if not any(msg.has_content_blocks("tool_result") for msg in messages):
@@ -1919,6 +1936,8 @@ async def test_max_steps_limit(chat_config, mock_tool):
     class FakeModel(ChatModelBase):
         class Parameters(BaseModel):
             pass
+
+        formatter = OpenAIChatFormatter()
 
         async def _call_api(self, model_name, messages, tools=None, tool_choice=None, **kwargs):
             return ChatResponse(

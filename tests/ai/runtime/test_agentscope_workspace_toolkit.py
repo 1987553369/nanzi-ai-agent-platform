@@ -30,7 +30,7 @@ async def test_build_workspace_toolkit_uses_workspace_builtins_and_keeps_platfor
     )
     monkeypatch.setattr(
         "app.services.ai.runtime.agentscope.workspace.discover_platform_skill_paths",
-        lambda: [],
+        lambda **kwargs: [],
     )
 
     workspace = await get_local_workspace(user_id="u1", conversation_id="c1")

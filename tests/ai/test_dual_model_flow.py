@@ -1,5 +1,6 @@
 import pytest
 from unittest.mock import AsyncMock, patch
+from agentscope.formatter import OpenAIChatFormatter
 from app.services.ai.executors.assistant_executor import AssistantExecutor
 from app.schemas.agent import ChatConfig
 
@@ -39,6 +40,8 @@ async def test_agentscope_native_tool_execution_flow():
     class FakeModel(ChatModelBase):
         class Parameters(BaseModel):
             pass
+
+        formatter = OpenAIChatFormatter()
 
         async def _call_api(self, model_name, messages, tools=None, tool_choice=None, **kwargs):
             if not any(msg.has_content_blocks("tool_result") for msg in messages):

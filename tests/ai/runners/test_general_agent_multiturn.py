@@ -2,6 +2,7 @@ import pytest
 from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, patch
 
+from agentscope.formatter import OpenAIChatFormatter
 from pydantic import BaseModel
 
 pytestmark = pytest.mark.no_infrastructure
@@ -202,6 +203,8 @@ async def test_general_runner_second_turn_skips_repeat_read_with_restored_state(
     class FakeModel(ChatModelBase):
         class Parameters(BaseModel):
             pass
+
+        formatter = OpenAIChatFormatter()
 
         async def _call_api(self, model_name, messages, tools=None, tool_choice=None, **kwargs):
             tool_results = [

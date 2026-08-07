@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 import pytest
@@ -12,7 +13,9 @@ ROOT = Path(__file__).resolve().parents[3]
 def test_dockerfile_uses_python_311_or_newer_for_agentscope():
     dockerfile = (ROOT / "docker" / "Dockerfile").read_text(encoding="utf-8")
 
-    assert "FROM python:3.11-slim" in dockerfile or "FROM python:3.12-slim" in dockerfile
+    match = re.search(r"^FROM python:(\d+)\.(\d+)(?:\.\d+)?-slim(?:-[\w]+)?$", dockerfile, re.MULTILINE)
+    assert match is not None
+    assert tuple(map(int, match.groups())) >= (3, 11)
 
 
 def test_requirements_declares_agentscope_runtime_extras():

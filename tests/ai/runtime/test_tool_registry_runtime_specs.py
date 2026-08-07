@@ -180,11 +180,15 @@ async def test_chatbi_runtime_tool_specs_invoke_function_tool_wrappers(monkeypat
     from app.services.ai.tools.registry import ToolRegistry
     from app.services.ai.tools.tool_compat import tool
 
-    schema_captured: dict[str, str | None] = {}
+    schema_captured: dict[str, object] = {}
 
     @tool
-    async def get_dataset_schema(keywords: str | None = None) -> str:
+    async def get_dataset_schema(
+        keywords: str | None = None,
+        metadata_dataset_ids: list[str] | None = None,
+    ) -> str:
         schema_captured["keywords"] = keywords
+        schema_captured["metadata_dataset_ids"] = metadata_dataset_ids
         return "schema-result"
 
     sql_captured: dict[str, str] = {}
@@ -203,7 +207,7 @@ async def test_chatbi_runtime_tool_specs_invoke_function_tool_wrappers(monkeypat
     sql_spec = await ToolRegistry.get_runtime_tool("execute_sql_query")
 
     assert await schema_spec.invoke({"keywords": "sales"}) == "schema-result"
-    assert schema_captured == {"keywords": "sales"}
+    assert schema_captured == {"keywords": "sales", "metadata_dataset_ids": None}
     assert await sql_spec.invoke(
         {
             "sql": "SELECT 1",

@@ -39,7 +39,8 @@ def test_no_synthesis_without_tools():
 
 
 def test_no_synthesis_when_reply_long_enough():
-    long_text = "这是一段足够长的最终回答，用于说明查询结果与后续建议。"
+    long_text = "这是一段足够长的最终回答，用于说明查询结果、后续建议与可执行处理步骤。"
+    assert len(long_text) >= 32
     assert not needs_tool_synthesis_fallback(long_text, long_text, used_tools=True)
 
 
