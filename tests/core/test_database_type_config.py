@@ -64,6 +64,17 @@ def test_development_allows_local_placeholder_configuration():
     settings.validate_runtime_configuration()
 
 
+def test_production_requires_database_transport_encryption():
+    settings = _build_settings(
+        API_SERVICE_ENV="production",
+        SSO_ACCESS_TOKEN="production-sso-token",
+        DATA_SOURCE_REQUIRE_TLS=False,
+    )
+
+    with pytest.raises(ValueError, match="DATA_SOURCE_REQUIRE_TLS 必须为 true"):
+        settings.validate_runtime_configuration()
+
+
 def test_private_outbound_approval_requires_exact_host_and_cidr():
     settings = _build_settings(
         RAGFLOW_ALLOWED_PRIVATE_HOSTS=["ragflow.internal"],

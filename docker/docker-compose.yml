@@ -9,11 +9,14 @@ services:
     volumes:
       - ./data:/app/data
       - ~/.agents/skills:/app/data/skills
+      - ./certs/data-sources:/app/certs/data-sources:ro
     environment:
       # Service Config
       - API_SERVICE_ENV=${API_SERVICE_ENV:-dev}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-[]}
+      - DATA_SOURCE_TLS_CA_DIR=/app/certs/data-sources
+      - DATA_SOURCE_REQUIRE_TLS=${DATA_SOURCE_REQUIRE_TLS:-false}
       # 业务默认时区（与系统配置 platform_timezone 默认值一致；无法改 MySQL 时仍可对齐应用写入时间）
       - TZ=${TZ:-Asia/Shanghai}
       - PLATFORM_TIMEZONE=${PLATFORM_TIMEZONE:-Asia/Shanghai}

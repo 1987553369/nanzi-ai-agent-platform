@@ -46,8 +46,30 @@ const form = reactive({
   user: '',
   password: '',
   database: '',
+  tlsMode: 'disabled' as DbConnectionConfig['tls_mode'],
+  tlsCaPath: '',
   description: '',
 })
+
+const tlsModeOptions = computed(() => {
+  if (form.type === 'sqlserver') {
+    return [{ value: 'verify_identity', label: '证书身份验证' }]
+  }
+  const options = [
+    { value: 'disabled', label: '未启用 TLS' },
+    { value: 'verify_ca', label: 'TLS CA 校验' },
+  ]
+  if (form.type === 'postgresql') {
+    options.push({ value: 'verify_identity', label: 'TLS 身份校验' })
+  }
+  return options
+})
+
+const tlsStatusLabel = (item: DbConnectionConfig) => {
+  if (item.tls_mode === 'verify_identity') return 'TLS 身份校验'
+  if (item.tls_mode === 'verify_ca') return 'TLS CA 校验'
+  return '未启用 TLS'
+}
 
 const filteredConfigs = computed(() => {
   const q = keyword.value.trim().toLowerCase()
@@ -72,6 +94,8 @@ const connectionTargetChanged = computed(() => {
     || Number(original.port) !== Number(form.port)
     || original.db_user !== form.user
     || original.database_name !== form.database
+    || original.tls_mode !== form.tlsMode
+    || (original.tls_ca_path || '') !== form.tlsCaPath
 })
 const passwordPlaceholder = computed(() => {
   if (!editingOriginal.value) return '请输入数据库密码'
@@ -99,6 +123,8 @@ const setDbType = (type: string) => {
   if (!db) return
   form.type = db.id
   form.port = db.defaultPort
+  form.tlsMode = db.id === 'sqlserver' ? 'verify_identity' : 'disabled'
+  form.tlsCaPath = ''
   testPassed.value = false
 }
 
@@ -118,10 +144,12 @@ const toConnectionPayload = () => ({
   user: form.user,
   password: form.password,
   database: form.database,
+  tls_mode: form.tlsMode,
+  tls_ca_path: form.tlsCaPath.trim(),
 })
 
 watch(
-  () => [form.type, form.host, form.port, form.user, form.password, form.database],
+  () => [form.type, form.host, form.port, form.user, form.password, form.database, form.tlsMode, form.tlsCaPath],
   () => {
     testPassed.value = false
     connError.value = ''
@@ -158,6 +186,8 @@ const resetForm = () => {
   form.user = ''
   form.password = ''
   form.database = ''
+  form.tlsMode = 'disabled'
+  form.tlsCaPath = ''
   form.description = ''
   testPassed.value = false
   connError.value = ''
@@ -175,6 +205,8 @@ const editConfig = (item: DbConnectionConfig) => {
   form.user = item.db_user
   form.password = ''
   form.database = item.database_name
+  form.tlsMode = item.tls_mode
+  form.tlsCaPath = item.tls_ca_path || ''
   form.description = item.description || ''
   testPassed.value = false
   connError.value = ''
@@ -205,6 +237,8 @@ const copyConfig = (item: DbConnectionConfig) => {
   form.user = item.db_user
   form.password = ''
   form.database = item.database_name
+  form.tlsMode = item.tls_mode
+  form.tlsCaPath = item.tls_ca_path || ''
   const copyNote = `（复制自 ${item.name}）`
   const description = (item.description || '').trim()
   form.description = description.includes(copyNote)
@@ -225,6 +259,8 @@ const toConfigPayload = () => ({
   db_user: form.user,
   password: form.password,
   database_name: form.database,
+  tls_mode: form.tlsMode,
+  tls_ca_path: form.tlsCaPath.trim(),
   description: form.description.trim(),
 })
 
@@ -703,6 +739,35 @@ onUnmounted(() => {
               <input v-model="form.database" class="w-full border border-blue-200 bg-blue-50/20 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm" placeholder="e.g. metadata_db">
             </div>
 
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">传输加密</label>
+                <select
+                  v-model="form.tlsMode"
+                  :disabled="form.type === 'sqlserver'"
+                  class="w-full border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm disabled:bg-gray-50"
+                >
+                  <option v-for="option in tlsModeOptions" :key="option.value" :value="option.value">
+                    {{ option.label }}
+                  </option>
+                </select>
+              </div>
+              <div v-if="form.tlsMode !== 'disabled' && form.type !== 'sqlserver'">
+                <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">CA 相对路径</label>
+                <input
+                  v-model="form.tlsCaPath"
+                  class="w-full border border-gray-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm"
+                  placeholder="如：production/root-ca.pem"
+                >
+              </div>
+            </div>
+            <p v-if="form.tlsMode !== 'disabled' && form.type !== 'sqlserver'" class="text-[11px] leading-relaxed text-gray-500">
+              路径必须位于部署审批的 DATA_SOURCE_TLS_CA_DIR 目录内；不能使用绝对路径或 ..。
+            </p>
+            <p v-if="form.tlsMode === 'disabled'" class="text-[11px] font-bold text-amber-600">
+              当前连接未启用传输加密；生产部署会拒绝此配置。
+            </p>
+
             <div v-if="form.type === 'clickhouse'" class="p-3 bg-blue-50/50 border border-blue-100 rounded-xl text-[11px] text-blue-700 leading-relaxed">
               <p class="font-bold mb-1">ClickHouse 连接提示：</p>
               <p>原生 TCP 常用端口为 9000；如果是 HTTP 端口 8123 请改为 9000。</p>
@@ -811,6 +876,14 @@ onUnmounted(() => {
                 </div>
                 <p class="text-xs font-mono text-gray-500 truncate">{{ item.host }}:{{ item.port }} / {{ item.database_name }}</p>
                 <p class="text-xs text-gray-400 mt-1">用户：{{ item.db_user }}</p>
+                <span
+                  class="mt-1 inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-bold"
+                  :class="item.tls_mode === 'disabled'
+                    ? 'border-amber-200 bg-amber-50 text-amber-700'
+                    : 'border-emerald-200 bg-emerald-50 text-emerald-700'"
+                >
+                  {{ tlsStatusLabel(item) }}
+                </span>
                 <p
                   v-if="item.credential_status === 'migration_pending' || item.credential_status === 'rotation_required'"
                   class="mt-1 text-xs font-bold text-amber-600"

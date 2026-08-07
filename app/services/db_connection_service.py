@@ -10,6 +10,7 @@ from app.utils.database_credentials import (
     decrypt_database_password,
     encrypt_database_password,
 )
+from app.utils.database_tls import validate_database_tls_config
 
 
 class DbConnectionService:
@@ -50,6 +51,9 @@ class DbConnectionService:
         if existing:
             raise ValueError("数据源名称已存在")
 
+        tls_mode, tls_ca_path = validate_database_tls_config(
+            data["db_type"], data.get("tls_mode"), data.get("tls_ca_path")
+        )
         encrypted_password = encrypt_database_password(data.get("password"))
         config = MetaDbConnectionConfig(
             name=data["name"],
@@ -66,6 +70,8 @@ class DbConnectionService:
             password_migration_error=None,
             password_migrated_at=datetime.now(),
             database_name=data["database_name"],
+            tls_mode=tls_mode,
+            tls_ca_path=tls_ca_path or None,
             description=data.get("description", ""),
             created_by=user_id,
         )
@@ -89,6 +95,9 @@ class DbConnectionService:
         if existing and existing.id != config_id:
             raise ValueError("数据源名称已存在")
 
+        tls_mode, tls_ca_path = validate_database_tls_config(
+            data["db_type"], data.get("tls_mode"), data.get("tls_ca_path")
+        )
         config.name = data["name"]
         config.db_type = data["db_type"]
         config.host = data["host"]
@@ -106,6 +115,8 @@ class DbConnectionService:
             config.password_migration_error = None
             config.password_migrated_at = datetime.now()
         config.database_name = data["database_name"]
+        config.tls_mode = tls_mode
+        config.tls_ca_path = tls_ca_path or None
         config.description = data.get("description", "")
 
         await conn.commit()
@@ -136,4 +147,6 @@ class DbConnectionService:
             "user": config.db_user,
             "password": DbConnectionService.get_runtime_password(config),
             "database": config.database_name,
+            "tls_mode": config.tls_mode,
+            "tls_ca_path": config.tls_ca_path or "",
         }

@@ -18,6 +18,8 @@ export interface DbConnectionConfig {
   has_password: boolean;
   credential_status: DbCredentialStatus;
   database_name: string;
+  tls_mode: "disabled" | "verify_ca" | "verify_identity";
+  tls_ca_path?: string;
   description?: string;
   created_by: number;
   created_at: string;
@@ -33,6 +35,8 @@ export interface DbConnectionConfigPayload {
   password?: string;
   clear_password?: boolean;
   database_name: string;
+  tls_mode: "disabled" | "verify_ca" | "verify_identity";
+  tls_ca_path?: string;
   description?: string;
 }
 

@@ -80,9 +80,12 @@ Webhook 接入固定解析 Client；动态 URL 模板不得修改 Origin，模�
 `NET-E` 已将通知测试、任务邮件和 Agent 邮件工具统一收敛到 SMTP 策略发送器；全量 DNS
 校验后固定连接 IP，465 使用隐式 TLS，其他批准端口强制 STARTTLS，TLS 仍以原域名校验证书；
 私网 SMTP 需要独立 Host + CIDR 审批。
-`NET-F` 已将五类数据库原生协议的连接池和导入入口接入固定解析与独立端口审批；PostgreSQL
-保留原 Host 做 TLS 语义，SQL Server 强制证书验证。剩余出网治理：AgentScope 模型 SDK、
-MySQL/ClickHouse/Oracle CA/TLS 配置模型，以及响应字节上限、熔断/审计和生产 egress 策略。
+`NET-F` 已将五类数据库原生协议的连接池和导入入口接入固定解析与独立端口审批。`NET-G` 进一步
+统一连接池、即时连接、表发现、DDL 和摸排长会话的 TLS 参数：PostgreSQL 使用原 Host + 固定
+`hostaddr` 支持 `verify-full`，SQL Server 强制系统信任库身份校验；MySQL/ClickHouse/Oracle 在
+固定 IP 下仅承诺 CA 链验证，不将其表述为域名身份校验。Oracle Thick 模式要求 Wallet 目录。
+生产由 `DATA_SOURCE_REQUIRE_TLS=true` 禁止明文降级。剩余出网治理包括 AgentScope 模型 SDK、
+响应字节上限、熔断/审计和生产 egress 策略。
 
 `SEC-06B` 已将外部数据源密码改为 `dbpassword:v1:` 版本化密文，并拆分写入与安全响应契约。
 列表和保存响应不再返回密码；前端通过保存配置 ID 请求连接测试、表列表和 DDL，由服务端短时

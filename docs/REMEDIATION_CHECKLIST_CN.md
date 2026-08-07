@@ -17,6 +17,7 @@
 | [x] | MCP-P0-01 | 阻止 MCP 凭据回显和日志泄露 | MCP DTO、Model、Client、前端表单 | 列表/详情仅返回配置状态；日志无 Header 值；新写入和存量凭据均使用版本化密文；明文运行时回退已禁用 |
 | [x] | NET-P0-01 | 建立统一 SSRF 防护并接入 MCP | URL Policy、MCP Client/Endpoint | 全量校验 A/AAAA；固定已验证 IP 连接并保留 Host/SNI；阻断私网、Loopback、Link-local、云元数据、跨 Origin 和重定向 |
 | [x] | SEC-06B | 外部数据源密码版本化加密、隔离迁移和 API 不回显 | 数据源 Model/Service/API、连接池、导入前端、MySQL V118、PostgreSQL V17 | 新写入立即加密；存量明文先隔离；运行时拒绝明文；响应仅返回 `has_password`/`credential_status`；轮换销毁旧池 |
+| [x] | NET-G | 外部数据库传输加密统一策略 | TLS 构建器、五类数据库连接入口、数据源前端、MySQL V119、PostgreSQL V18 | MySQL/ClickHouse/Oracle 强制 CA 校验；PostgreSQL 支持 CA/身份校验；SQL Server 强制身份校验；生产拒绝 `disabled`；CA 路径不能逃逸审批目录 |
 
 ## 二、P1 工程与安全稳定（P0 后 2-6 周）
 
@@ -53,7 +54,7 @@
 |---|---|---|
 | AUTH-P0-02 | 第三方跨域 Embed 仍需要短期、限受众 Embed Token 签发/撤销服务 | 新增 Token 表/签发接口、Origin/Agent 绑定、TTL、撤销和审计后再开放生产跨域嵌入 |
 | SEC-P0-02 | 代码执行当前只做了权限止血，执行进程仍在平台边界内 | 独立 Worker/Queue，非 root、只读根、无 Secret、网络/CPU/内存/PID/超时策略 |
-| NET-P0-02 | MCP、用户 HTTP 工具、公开网页抓取、Generic API、模型发现/Embedding、HTTP Webhook、SSO、RAGFlow、OpenClaw、External SQL HTTP 网关、SMTP 和用户配置的数据库原生协议已接入固定解析；受控私网目标要求精确 Host + CIDR 双重审批并限制端口。SMTP 强制 TLS；SQL Server 强制证书校验。动态浏览器任意 URL 已 fail-closed；AgentScope 模型 SDK、MySQL/ClickHouse/Oracle TLS 配置模型及生产网络层仍待治理 | 将 Host/CIDR/端口审批纳入部署变更和审计；继续完成各驱动 CA/TLS 配置、Browser Worker、egress proxy/NetworkPolicy、响应字节上限和跨协议重绑定演练 |
+| NET-P0-02 | 应用层 HTTP、SMTP 和五类数据库原生协议已接入固定解析；受控私网目标要求精确 Host + CIDR 双重审批并限制端口。SMTP 与数据库已具备强制 TLS 策略。动态浏览器任意 URL 已 fail-closed；AgentScope 模型 SDK和生产网络层仍待治理 | 将 Host/CIDR/端口/CA 审批纳入部署变更和审计；继续完成 Browser Worker、egress proxy/NetworkPolicy、响应字节上限和跨协议重绑定演练 |
 
 ## 四、产品与平台完善（2-9 个月）
 
@@ -114,3 +115,5 @@
 | 2026-08-07 | NET-F 验证 | Python 3.9 数据库出站专项 102 项、扩大后的出站/SSO 核心回归 113 项通过；Python 3.11 本批文件定向编译和 `git diff --check` 通过。本机缺少 `aiomysql`、`asynch`、`oracledb`、`psycopg`、`aioodbc` 和 `sqlglot`，驱动 mock/集成测试需标准 CI 回归；未连接真实数据库或执行迁移。MySQL/ClickHouse/Oracle 的 CA/TLS 配置模型及数据库凭据加密另列后续高优先级批次 |
 | 2026-08-07 | SEC-06B（数据源凭据） | 新增 `dbpassword:v1:` 版本化密文和四态凭据状态；MySQL V118/PostgreSQL V17 只隔离存量明文；离线命令默认 dry-run、逐行锁定后加密；运行时拒绝明文和隔离凭据；API/前端不回显密码，保存配置按 ID 在服务端解密；密码轮换销毁旧连接池 |
 | 2026-08-07 | SEC-06B 验证 | 数据源凭据、迁移和静态安全契约 17 项通过；前端 `npm run build` 完整通过（10,386 个模块）；Python 3.11 定向编译和 `git diff --check` 通过。未执行真实数据库迁移、数据库连接或部署；真实迁移需先备份并执行 dry-run 审核 |
+| 2026-08-07 | NET-G（数据库 TLS） | 新增 `disabled/verify_ca/verify_identity` 策略和审批目录 CA 相对路径；连接池、即时测试、表发现、DDL 与长会话统一使用共享构建器；MySQL/ClickHouse/Oracle 仅宣称 CA 校验，PostgreSQL 支持 `verify-ca/verify-full`，SQL Server 保持系统信任库身份校验；Oracle Thick 使用 Wallet 目录；生产启动和运行时拒绝未启用 TLS；新增 MySQL V119/PostgreSQL V18 |
+| 2026-08-07 | NET-G 验证 | 离线 core 与迁移运行时回归 243 项、前端契约 320 项通过；`npm run build` 完整通过（10,386 个模块）；Python 3.11 定向编译和 `git diff --check` 通过。未执行真实数据库连接、迁移或部署；上线前需在隔离环境验证各驱动证书链、吊销和轮换 |

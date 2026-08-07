@@ -38,11 +38,13 @@ class DBImportService:
     @staticmethod
     async def _mysql_connect(config: Dict[str, Any]):
         from app.utils.database_outbound import resolve_database_target
+        from app.utils.database_tls import build_mysql_tls_kwargs
 
         target = await resolve_database_target(
             config.get("host"),
             int(config.get("port", 3306)),
         )
+        tls_kwargs = build_mysql_tls_kwargs(config)
         return await aiomysql.connect(
             host=target.connect_address,
             port=target.port,
@@ -50,16 +52,19 @@ class DBImportService:
             password=config.get("password"),
             db=config.get("database"),
             connect_timeout=10,
+            **tls_kwargs,
         )
 
     @staticmethod
     async def _clickhouse_connect(config: Dict[str, Any]):
         from app.utils.database_outbound import resolve_database_target
+        from app.utils.database_tls import build_clickhouse_tls_kwargs
 
         port = int(config.get("port", 9000))
         if port == 8123:
             raise ValueError("端口 8123 为 HTTP 协议，当前仅支持 ClickHouse Native TCP")
         target = await resolve_database_target(config.get("host"), port)
+        tls_kwargs = build_clickhouse_tls_kwargs(config)
         connection = asynch.Connection(
             host=target.connect_address,
             port=target.port,
@@ -67,6 +72,7 @@ class DBImportService:
             password=config.get("password"),
             database=config.get("database"),
             connect_timeout=10,
+            **tls_kwargs,
         )
         await connection.connect()
         return connection
@@ -360,33 +366,39 @@ class DBImportService:
                 await conn.close()
 
     @staticmethod
-    async def _get_oracle_dsn(config: Dict[str, Any]) -> str:
-        """构建 Oracle DSN"""
+    async def _get_oracle_connect_args(config: Dict[str, Any]):
+        """构建固定目标地址的 Oracle DSN 和 TLS 参数。"""
         from app.utils.database_outbound import resolve_database_target
+        from app.utils.database_tls import build_oracle_tls_connection
 
         target = await resolve_database_target(
             config.get("host"),
             int(config.get("port", 1521)),
         )
-        return oracledb.makedsn(
-            target.connect_address,
-            target.port,
-            sid=config.get('database') if not config.get('service_name') else None,
-            service_name=config.get('service_name')
+        return build_oracle_tls_connection(
+            config,
+            connect_address=target.connect_address,
+            port=target.port,
+            use_thick_mode=os.environ.get("USE_ORACLE_THICK_MODE") == "1",
         )
+
+    @staticmethod
+    async def _get_oracle_dsn(config: Dict[str, Any]) -> str:
+        dsn, _ = await DBImportService._get_oracle_connect_args(config)
+        return dsn
 
     @staticmethod
     async def test_oracle_connection(config: Dict[str, Any]) -> bool:
         """测试 Oracle 连接"""
         try:
-            dsn = await DBImportService._get_oracle_dsn(config)
+            dsn, tls_kwargs = await DBImportService._get_oracle_connect_args(config)
             user = config.get('user')
             password = config.get('password')
 
             if os.environ.get("USE_ORACLE_THICK_MODE") == "1":
                 # 厚模式：使用同步驱动 + 线程包装
                 def sync_op():
-                    with oracledb.connect(user=user, password=password, dsn=dsn) as conn:
+                    with oracledb.connect(user=user, password=password, dsn=dsn, **tls_kwargs) as conn:
                         with conn.cursor() as cur:
                             cur.execute("SELECT 1 FROM DUAL")
                             cur.fetchone()
@@ -394,7 +406,7 @@ class DBImportService:
                 return await asyncio.to_thread(sync_op)
             else:
                 # 薄模式：原生异步
-                conn = await oracledb.connect_async(user=user, password=password, dsn=dsn)
+                conn = await oracledb.connect_async(user=user, password=password, dsn=dsn, **tls_kwargs)
                 async with conn:
                     async with conn.cursor() as cur:
                         await cur.execute("SELECT 1 FROM DUAL")
@@ -408,7 +420,7 @@ class DBImportService:
     async def get_oracle_tables(config: Dict[str, Any]) -> List[Dict[str, str]]:
         """获取 Oracle 表列表及其备注 (包含视图类型)"""
         try:
-            dsn = await DBImportService._get_oracle_dsn(config)
+            dsn, tls_kwargs = await DBImportService._get_oracle_connect_args(config)
             user = config.get('user')
             password = config.get('password')
 
@@ -417,7 +429,7 @@ class DBImportService:
             if os.environ.get("USE_ORACLE_THICK_MODE") == "1":
                 # 厚模式：使用同步驱动 + 线程包装
                 def sync_op():
-                    with oracledb.connect(user=user, password=password, dsn=dsn) as conn:
+                    with oracledb.connect(user=user, password=password, dsn=dsn, **tls_kwargs) as conn:
                         with conn.cursor() as cur:
                             cur.execute(query)
                             res = cur.fetchall()
@@ -431,7 +443,7 @@ class DBImportService:
                 return await asyncio.to_thread(sync_op)
             else:
                 # 薄模式：原生异步
-                conn = await oracledb.connect_async(user=user, password=password, dsn=dsn)
+                conn = await oracledb.connect_async(user=user, password=password, dsn=dsn, **tls_kwargs)
                 async with conn:
                     async with conn.cursor() as cur:
                         await cur.execute(query)
@@ -451,7 +463,7 @@ class DBImportService:
     async def get_oracle_ddl(config: Dict[str, Any], table_names: List[str]) -> str:
         """获取 Oracle DDL (支持 TABLE 和 VIEW)"""
         try:
-            dsn = await DBImportService._get_oracle_dsn(config)
+            dsn, tls_kwargs = await DBImportService._get_oracle_connect_args(config)
             user = config.get('user')
             password = config.get('password')
 
@@ -490,7 +502,7 @@ class DBImportService:
 
             if os.environ.get("USE_ORACLE_THICK_MODE") == "1":
                 def sync_op():
-                    with oracledb.connect(user=user, password=password, dsn=dsn) as conn:
+                    with oracledb.connect(user=user, password=password, dsn=dsn, **tls_kwargs) as conn:
                         with conn.cursor() as cur:
                             cur.execute(type_query, [t.upper() for t in table_names])
                             type_res = cur.fetchall()
@@ -498,7 +510,7 @@ class DBImportService:
                             return sync_process_ddls(cur, table_types_map)
                 return await asyncio.to_thread(sync_op)
             else:
-                conn = await oracledb.connect_async(user=user, password=password, dsn=dsn)
+                conn = await oracledb.connect_async(user=user, password=password, dsn=dsn, **tls_kwargs)
                 async with conn:
                     async with conn.cursor() as cur:
                         await cur.execute(type_query, [t.upper() for t in table_names])
@@ -656,12 +668,12 @@ class DbDdlSession:
         elif self.db_type == "clickhouse":
             self._conn = await DBImportService._clickhouse_connect(self.config)
         elif self.db_type == "oracle":
-            dsn = await DBImportService._get_oracle_dsn(self.config)
+            dsn, tls_kwargs = await DBImportService._get_oracle_connect_args(self.config)
             user = self.config.get("user")
             password = self.config.get("password")
             if self._use_oracle_thick:
                 def open_conn():
-                    conn = oracledb.connect(user=user, password=password, dsn=dsn)
+                    conn = oracledb.connect(user=user, password=password, dsn=dsn, **tls_kwargs)
                     with conn.cursor() as cur:
                         cur.execute(
                             "SELECT TABLE_NAME, TABLE_TYPE FROM USER_TAB_COMMENTS "
@@ -672,7 +684,7 @@ class DbDdlSession:
 
                 self._conn, self._oracle_table_types = await asyncio.to_thread(open_conn)
             else:
-                self._conn = await oracledb.connect_async(user=user, password=password, dsn=dsn)
+                self._conn = await oracledb.connect_async(user=user, password=password, dsn=dsn, **tls_kwargs)
                 async with self._conn.cursor() as cur:
                     await cur.execute(
                         "SELECT TABLE_NAME, TABLE_TYPE FROM USER_TAB_COMMENTS "

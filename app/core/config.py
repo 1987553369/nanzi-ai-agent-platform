@@ -79,6 +79,8 @@ class Settings(BaseSettings):
     DATA_SOURCE_ALLOWED_PRIVATE_HOSTS: List[str] = []
     DATA_SOURCE_ALLOWED_PRIVATE_CIDRS: List[str] = []
     DATA_SOURCE_ALLOWED_PORTS: List[int] = [1433, 1521, 2484, 3306, 5432, 9000, 9440]
+    DATA_SOURCE_TLS_CA_DIR: str = "/app/certs/data-sources"
+    DATA_SOURCE_REQUIRE_TLS: bool = False
 
     # Ebbinghaus Memory Configs
     MEMORY_BASE_HALF_LIFE: float = 7.0
@@ -156,6 +158,8 @@ class Settings(BaseSettings):
             errors.append("SSO_API_URL 必须使用 HTTPS")
         if "*" in self.ALLOWED_ORIGINS:
             errors.append("ALLOWED_ORIGINS 禁止使用通配符")
+        if not self.DATA_SOURCE_REQUIRE_TLS:
+            errors.append("DATA_SOURCE_REQUIRE_TLS 必须为 true")
         if errors:
             raise ValueError("生产环境禁止使用占位安全配置: " + ", ".join(errors))
 

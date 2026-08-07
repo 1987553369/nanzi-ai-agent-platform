@@ -123,6 +123,8 @@ class DBConnectionConfig(BaseModel):
     user: str
     password: str
     database: str
+    tls_mode: str = ""
+    tls_ca_path: str = ""
 
 class DDLRequest(BaseModel):
     config: DBConnectionConfig

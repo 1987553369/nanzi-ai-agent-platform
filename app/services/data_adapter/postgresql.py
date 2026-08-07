@@ -51,6 +51,9 @@ def build_postgresql_conninfo(
     }
     if connect_address:
         conninfo["hostaddr"] = connect_address
+    from app.utils.database_tls import build_postgresql_tls_kwargs
+
+    conninfo.update(build_postgresql_tls_kwargs(config))
     return conninfo
 
 

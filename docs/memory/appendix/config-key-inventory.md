@@ -50,6 +50,8 @@
 | `DATA_SOURCE_ALLOWED_PRIVATE_HOSTS` | `List[str]` | `[]` | `app/core/config.py:79` |
 | `DATA_SOURCE_ALLOWED_PRIVATE_CIDRS` | `List[str]` | `[]` | `app/core/config.py:80` |
 | `DATA_SOURCE_ALLOWED_PORTS` | `List[int]` | `[1433, 1521, 2484, 3306, 5432, 9000, 9440]` | `app/core/config.py:81` |
+| `DATA_SOURCE_TLS_CA_DIR` | `str` | `'/app/certs/data-sources'` | `app/core/config.py:82` |
+| `DATA_SOURCE_REQUIRE_TLS` | `bool` | `False`（生产必须为 `true`） | `app/core/config.py:83` |
 | `MEMORY_BASE_HALF_LIFE` | `float` | `7.0` | `app/core/config.py:84` |
 | `MEMORY_CONSOLIDATION_THRESHOLD` | `float` | `0.82` | `app/core/config.py:85` |
 | `SSO_API_URL` | `str` | `'https://yovole.net/api/v1/user/check/login'` | `app/core/config.py:88` |

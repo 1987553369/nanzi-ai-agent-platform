@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, UniqueConstraint, ForeignKey, JSON, SmallInteger, Text
+from sqlalchemy import CheckConstraint, Column, Integer, String, DateTime, UniqueConstraint, ForeignKey, JSON, SmallInteger, Text
 from datetime import datetime
 from app.core.orm import Base
 
@@ -8,6 +8,22 @@ class MetaDbConnectionConfig(Base):
     __tablename__ = "meta_db_connection_configs"
     __table_args__ = (
         UniqueConstraint("name", name="uk_meta_db_connection_configs_name"),
+        CheckConstraint(
+            "tls_mode IN ('disabled', 'verify_ca', 'verify_identity')",
+            name="ck_meta_db_connection_tls_mode",
+        ),
+        CheckConstraint(
+            "(LOWER(db_type) IN ('sqlserver', 'mssql', 'tsql') "
+            "AND tls_mode = 'verify_identity' AND tls_ca_path IS NULL) OR "
+            "(LOWER(db_type) IN ('postgres', 'postgresql', 'pg') AND "
+            "((tls_mode = 'disabled' AND tls_ca_path IS NULL) OR "
+            "(tls_mode IN ('verify_ca', 'verify_identity') AND tls_ca_path IS NOT NULL "
+            "AND tls_ca_path <> ''))) OR "
+            "(LOWER(db_type) IN ('mysql', 'clickhouse', 'oracle') AND "
+            "((tls_mode = 'disabled' AND tls_ca_path IS NULL) OR "
+            "(tls_mode = 'verify_ca' AND tls_ca_path IS NOT NULL AND tls_ca_path <> '')))",
+            name="ck_meta_db_connection_tls_policy",
+        ),
     )
 
     id            = Column(Integer, primary_key=True, index=True)
@@ -21,6 +37,8 @@ class MetaDbConnectionConfig(Base):
     password_migration_error = Column(String(500), nullable=True, comment='不含密码内容的迁移失败原因')
     password_migrated_at = Column(DateTime, nullable=True, comment='密码完成加密或人工轮换的时间')
     database_name = Column(String(100), nullable=False, comment='数据库/库名')
+    tls_mode      = Column(String(32), nullable=False, default='disabled', comment='disabled/verify_ca/verify_identity')
+    tls_ca_path   = Column(String(500), nullable=True, comment='DATA_SOURCE_TLS_CA_DIR 下的 CA 相对路径')
     description   = Column(String(500), nullable=False, default='', comment='备注/用途说明')
     created_by    = Column(Integer, nullable=False, default=0, comment='创建者用户 ID')
     created_at    = Column(DateTime, default=datetime.now)

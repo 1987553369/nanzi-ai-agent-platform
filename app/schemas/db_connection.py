@@ -13,6 +13,8 @@ class DbConnectionConfigCreate(BaseModel):
     password: str = ""
     clear_password: bool = False
     database_name: str
+    tls_mode: str = ""
+    tls_ca_path: Optional[str] = None
     description: str = ""
 
 
@@ -27,6 +29,8 @@ class DbConnectionConfigSafeResponse(BaseModel):
     has_password: bool
     credential_status: str
     database_name: str
+    tls_mode: str
+    tls_ca_path: Optional[str] = None
     description: str = ""
     created_by: int
     created_at: datetime

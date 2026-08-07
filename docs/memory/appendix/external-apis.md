@@ -12,7 +12,7 @@
 | 通用 API 工具 | 可配置外部 HTTP 请求 | `sys_api_tools` | 工具特定业务数据 | 已固定解析且禁止动态 Origin；继续限制任意 Header、响应字节和目标域审批 |
 | 企业 SSO | 配置的登录校验接口和固定用户目录接口 | `SSO_API_URL`、Token 和配置 | 登录身份/断言 | 已固定解析、强制 TLS、禁止代理/重定向并 Fail-closed；继续建设响应签名、防重放和审计 |
 | External SQL HTTP 网关 | `external_sql_api_url` | 系统 URL 和 `X-API-Key` | 只读 SQL、数据源和查询结果 | 已固定解析；私网要求专属精确 Host + CIDR 并绑定 Origin；继续限制响应字节、幂等重试和审计 |
-| 业务数据库 | MySQL/PostgreSQL/Oracle/ClickHouse/SQL Server | `meta_db_connection_configs.password` 保存 `dbpassword:v1:` 密文；API 只返回状态 | SQL、元数据、样本和结果 | 已固定解析；私网要求精确 Host + CIDR + 端口审批；SQL Server 强制证书校验；存量明文由 V118/V17 隔离并通过默认 dry-run 的离线命令迁移；继续建设其他驱动 CA/TLS、只读账号、查询预算、KMS 和轮换演练 |
+| 业务数据库 | MySQL/PostgreSQL/Oracle/ClickHouse/SQL Server | 密码保存 `dbpassword:v1:` 密文；API 只返回状态；CA 只保存审批目录相对路径 | SQL、元数据、样本和结果 | 已固定解析；私网要求精确 Host + CIDR + 端口审批；MySQL/ClickHouse/Oracle 支持 CA 校验，PostgreSQL 支持 CA/身份校验，SQL Server 强制身份校验；生产拒绝无 TLS；Oracle Thick 使用 Wallet；V118/V17 隔离存量密码，V119/V18 增加 TLS 策略；继续建设只读账号、查询预算、KMS、证书轮换和真实驱动演练 |
 | 通知/Webhook | 渠道特定 HTTP/SMTP 接口 | 用户/系统通知配置 | 任务、报表内容和身份 | HTTP 与 SMTP 均已固定解析；SMTP 私网要求专属 Host + CIDR、端口审批和强制 TLS；继续建设目标域名审批、数据分类、重试幂等和投递回执 |
 | 搜索/公开网页 | Bing、Baidu 或 URL Fetch | 工具配置 | 用户问题和网页 URL | 静态抓取已逐跳固定解析；动态浏览器任意 URL 已关闭，待隔离 Worker/egress 后恢复；继续限制内容大小/类型和 Prompt Injection |
 

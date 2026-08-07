@@ -42,6 +42,9 @@ def build_sqlserver_odbc_dsn(
     certificate_hostname: Optional[str] = None,
 ) -> str:
     """构建 SQL Server ODBC 连接串（供连接池与导入服务共用）。"""
+    from app.utils.database_tls import validate_sqlserver_tls
+
+    validate_sqlserver_tls(config)
     driver = os.environ.get("MSSQL_ODBC_DRIVER", "ODBC Driver 18 for SQL Server")
     port = int(config.get("port", 1433))
     original_host = str(config.get("host") or "")

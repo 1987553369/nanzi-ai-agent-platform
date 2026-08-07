@@ -92,7 +92,8 @@ class DataSourcePoolManager:
         password = DbConnectionService.get_runtime_password(db_config)
         raw_str = (
             f"{db_config.db_type}:{db_config.host}:{db_config.port}:"
-            f"{db_config.db_user}:{password}:{db_config.database_name}"
+            f"{db_config.db_user}:{password}:{db_config.database_name}:"
+            f"{db_config.tls_mode}:{db_config.tls_ca_path or ''}"
         )
         return hashlib.sha256(raw_str.encode("utf-8")).hexdigest()
 
@@ -149,11 +150,16 @@ class DataSourcePoolManager:
     async def _create_mysql_pool(cls, db_config: Any) -> Any:
         """创建 MySQL 连接池"""
         import aiomysql
+        from app.utils.database_tls import build_mysql_tls_kwargs
         from app.utils.database_outbound import resolve_database_target
         from app.services.db_connection_service import DbConnectionService
 
         target = await resolve_database_target(db_config.host, int(db_config.port))
         password = DbConnectionService.get_runtime_password(db_config)
+        tls_kwargs = build_mysql_tls_kwargs({
+            "tls_mode": db_config.tls_mode,
+            "tls_ca_path": db_config.tls_ca_path,
+        })
         pool = await aiomysql.create_pool(
             host=target.connect_address,
             port=target.port,
@@ -162,7 +168,8 @@ class DataSourcePoolManager:
             password=password,
             minsize=1,
             maxsize=50,  # 适度控制单进程池大小以防止多 worker 爆表
-            autocommit=False
+            autocommit=False,
+            **tls_kwargs,
         )
         return pool
 
@@ -170,11 +177,16 @@ class DataSourcePoolManager:
     async def _create_clickhouse_pool(cls, db_config: Any) -> Any:
         """创建 ClickHouse 连接池"""
         from asynch.pool import Pool as AsynchPool
+        from app.utils.database_tls import build_clickhouse_tls_kwargs
         from app.utils.database_outbound import resolve_database_target
         from app.services.db_connection_service import DbConnectionService
 
         target = await resolve_database_target(db_config.host, int(db_config.port))
         password = DbConnectionService.get_runtime_password(db_config)
+        tls_kwargs = build_clickhouse_tls_kwargs({
+            "tls_mode": db_config.tls_mode,
+            "tls_ca_path": db_config.tls_ca_path,
+        })
         pool = AsynchPool(
             host=target.connect_address,
             port=target.port,
@@ -183,7 +195,8 @@ class DataSourcePoolManager:
             password=password,
             minsize=1,
             maxsize=50,
-            encoding_errors="replace"
+            encoding_errors="replace",
+            **tls_kwargs,
         )
         return pool
 
@@ -205,6 +218,8 @@ class DataSourcePoolManager:
                 "database": db_config.database_name,
                 "user": db_config.db_user,
                 "password": password,
+                "tls_mode": db_config.tls_mode,
+                "tls_ca_path": db_config.tls_ca_path or "",
             },
             connect_address=target.connect_address,
             certificate_hostname=target.hostname,
@@ -254,6 +269,8 @@ class DataSourcePoolManager:
                 "database": db_config.database_name,
                 "user": db_config.db_user,
                 "password": password,
+                "tls_mode": db_config.tls_mode,
+                "tls_ca_path": db_config.tls_ca_path or "",
             },
             connect_address=target.connect_address,
         )
@@ -271,25 +288,24 @@ class DataSourcePoolManager:
     async def _create_oracle_pool(cls, db_config: Any) -> Any:
         """创建 Oracle 连接池"""
         import oracledb
+        from app.utils.database_tls import build_oracle_tls_connection
         from app.utils.database_outbound import resolve_database_target
         from app.services.db_connection_service import DbConnectionService
 
         target = await resolve_database_target(db_config.host, int(db_config.port))
         password = DbConnectionService.get_runtime_password(db_config)
         
-        # 组装 DSN：由于智能体平台没有 extra_params，我们将 database_name 默认作为 SID 构建。
-        # 如果用户名/密码/端口配置正确，可以直接通过 SID 连接。
-        # 兼容性设计：若 database_name 包含斜杠（如 '/ORCL'），则默认当作服务名构建 DSN。
-        db_name = db_config.database_name.strip()
-        if db_name.startswith("/"):
-            connect_host = target.connect_address
-            if ":" in connect_host:
-                connect_host = f"[{connect_host}]"
-            dsn = f"{connect_host}:{target.port}{db_name}"
-        else:
-            dsn = oracledb.makedsn(target.connect_address, target.port, sid=db_name)
-
         use_thick_mode = os.environ.get("USE_ORACLE_THICK_MODE") == "1"
+        dsn, tls_kwargs = build_oracle_tls_connection(
+            {
+                "database": db_config.database_name,
+                "tls_mode": db_config.tls_mode,
+                "tls_ca_path": db_config.tls_ca_path or "",
+            },
+            connect_address=target.connect_address,
+            port=target.port,
+            use_thick_mode=use_thick_mode,
+        )
         
         if use_thick_mode:
             logger.info("[Pool Manager] 正在创建 Oracle Thick Mode 连接池 (同步连接池)")
@@ -300,7 +316,8 @@ class DataSourcePoolManager:
                 dsn=dsn,
                 min=1,
                 max=20,
-                increment=1
+                increment=1,
+                **tls_kwargs,
             )
             return pool
         else:
@@ -311,7 +328,8 @@ class DataSourcePoolManager:
                 dsn=dsn,
                 min=1,
                 max=20,
-                increment=1
+                increment=1,
+                **tls_kwargs,
             )
             return pool
 

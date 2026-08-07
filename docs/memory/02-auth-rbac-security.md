@@ -41,12 +41,16 @@
 - `NET-A/NET-B/NET-C/NET-D/NET-E/NET-F` 已为 MCP、用户 HTTP 工具、公开网页抓取、Generic API、模型发现/
   Embedding、HTTP Webhook、SSO、RAGFlow、OpenClaw、External SQL HTTP 网关、SMTP 和数据库原生协议接入固定解析；
   受控私网目标要求集成专属精确 Host 与 CIDR 双重审批，存量模型/RAGFlow/OpenClaw Key 绑定
-  Origin；SMTP 和数据库同时要求部署端口审批，SQL Server 已禁止信任任意证书。AgentScope SDK、
-  MySQL/ClickHouse/Oracle CA/TLS 配置模型与生产 egress 仍需继续治理。
+  Origin；SMTP 和数据库同时要求部署端口审批。`NET-G` 已为五类数据库增加统一 TLS 模型：
+  MySQL/ClickHouse/Oracle 支持 CA 链验证，PostgreSQL 支持 CA 与域名身份验证，SQL Server 强制
+  系统信任库身份验证；生产环境拒绝 `disabled`。AgentScope SDK 与生产 egress 仍需继续治理。
 - 外部数据源密码已在 `SEC-06B` 改为 `dbpassword:v1:` 版本化密文。MySQL V118/PostgreSQL
   V17 仅将存量明文标记为 `migration_pending`，运行时拒绝使用；离线命令默认 dry-run，审核后
   才可逐行锁定并加密。API 响应只返回 `has_password`/`credential_status`，密码轮换后销毁旧连接池。
   尚未执行真实数据库迁移，后续仍需接入 KMS 密钥版本并完成轮换和恢复演练。
+- 数据源 CA 只允许保存 `DATA_SOURCE_TLS_CA_DIR` 下的相对路径，运行时解析真实路径并阻止绝对路径、
+  `..` 和符号链接逃逸。MySQL V119/PostgreSQL V18 为存量配置增加 TLS 字段；SQL Server 迁移为
+  `verify_identity`，其余类型迁移为 `disabled`，生产强制策略会使未升级连接 fail-closed。
 - SSO 已强制 HTTPS/TLS 证书校验、固定 DNS 解析并禁止环境代理和自动重定向；登录失败不再向
   未认证调用者回显底层连接异常。后续仍需补充服务端响应签名、防重放和真实不可信证书联调。
 - Cookie 固定 `secure=False`，长期 API Key 返回浏览器并保存在 `localStorage`。
