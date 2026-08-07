@@ -39,7 +39,13 @@ async def test_web_search_bing_http_success():
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=None)
 
-    with patch("httpx.AsyncClient", return_value=mock_client):
+    with patch(
+        "app.services.ai.tools.advanced_auxiliary_tools.create_ssrf_safe_async_client",
+        return_value=mock_client,
+    ), patch(
+        "app.services.ai.tools.advanced_auxiliary_tools.get_with_ssrf_safe_redirects",
+        new=AsyncMock(return_value=mock_response),
+    ) as safe_get:
         result = await web_search_bing_http.ainvoke(
             {"query": "NanZi platform", "max_results": 2}
         )
@@ -49,7 +55,7 @@ async def test_web_search_bing_http_success():
     assert "Bing Result Two" in result
     assert "First Bing snippet about NanZi" in result
     assert "https://example.com/a" in result
-    called_url = mock_client.get.await_args.args[0]
+    called_url = safe_get.await_args.args[1]
     assert "bing.com/search" in called_url
 
 
@@ -65,7 +71,13 @@ async def test_web_search_bing_http_no_results():
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=None)
 
-    with patch("httpx.AsyncClient", return_value=mock_client):
+    with patch(
+        "app.services.ai.tools.advanced_auxiliary_tools.create_ssrf_safe_async_client",
+        return_value=mock_client,
+    ), patch(
+        "app.services.ai.tools.advanced_auxiliary_tools.get_with_ssrf_safe_redirects",
+        new=AsyncMock(return_value=mock_response),
+    ):
         result = await web_search_bing_http.ainvoke(
             {"query": "zzzz-not-found", "max_results": 2}
         )

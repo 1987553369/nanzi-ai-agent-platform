@@ -9,6 +9,7 @@ from app.utils.outbound_url_policy import (
     OutboundUrlPolicyError,
     ResolvedIPTransport,
     create_ssrf_safe_async_client,
+    get_with_ssrf_safe_redirects,
     resolve_outbound_target,
     validate_outbound_http_url,
     validate_outbound_url,
@@ -331,3 +332,82 @@ def test_transport_falls_back_across_prevalidated_addresses_only(monkeypatch):
         instance.requests[0].headers["host"] == "service.example"
         for instance in _FallbackTransport.instances
     )
+
+
+def test_safe_redirects_reject_private_hop_before_second_request():
+    class _RedirectClient:
+        def __init__(self):
+            self.calls = []
+            self.responses = []
+
+        async def get(self, url, headers=None):
+            self.calls.append((url, headers))
+            response = httpx.Response(
+                302,
+                headers={"location": "http://127.0.0.1/admin"},
+            )
+            self.responses.append(response)
+            return response
+
+    client = _RedirectClient()
+    with pytest.raises(OutboundUrlPolicyError, match="公网"):
+        asyncio.run(
+            get_with_ssrf_safe_redirects(
+                client,
+                "https://public.example/start",
+            )
+        )
+    assert len(client.calls) == 1
+    assert client.responses[0].is_closed
+
+
+def test_safe_redirects_strip_credentials_when_origin_changes():
+    class _RedirectClient:
+        def __init__(self):
+            self.calls = []
+
+        async def get(self, url, headers=None):
+            self.calls.append((url, dict(headers or {})))
+            if len(self.calls) == 1:
+                return httpx.Response(
+                    302,
+                    headers={"location": "https://cdn.example/final"},
+                )
+            return httpx.Response(200, text="ok")
+
+    client = _RedirectClient()
+    response = asyncio.run(
+        get_with_ssrf_safe_redirects(
+            client,
+            "https://public.example/start",
+            headers={
+                "Authorization": "Bearer secret",
+                "Cookie": "session=secret",
+                "X-API-Key": "secret",
+                "User-Agent": "NanZi-Test",
+            },
+        )
+    )
+
+    assert response.status_code == 200
+    assert len(client.calls) == 2
+    redirected_headers = client.calls[1][1]
+    assert "Authorization" not in redirected_headers
+    assert "Cookie" not in redirected_headers
+    assert "X-API-Key" not in redirected_headers
+    assert redirected_headers["User-Agent"] == "NanZi-Test"
+
+
+def test_safe_redirects_enforce_hop_limit():
+    class _RedirectClient:
+        async def get(self, url, headers=None):
+            return httpx.Response(302, headers={"location": "/again"})
+
+    with pytest.raises(OutboundUrlPolicyError, match="次数过多"):
+        asyncio.run(
+            get_with_ssrf_safe_redirects(
+                _RedirectClient(),
+                "https://public.example/start",
+                max_redirects=1,
+            )
+        )

@@ -4,12 +4,15 @@ import logging
 import sqlite3
 import pandas as pd
 import json
-import uuid
 import ast
 from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright
 from typing import Optional, Dict, List, Any, Tuple
 from app.services.ai.tools.tool_compat import tool
+from app.utils.outbound_url_policy import (
+    create_ssrf_safe_async_client,
+    get_with_ssrf_safe_redirects,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -153,52 +156,11 @@ async def web_renderer_and_snapshot(url: str) -> str:
     Args:
         url: 待渲染与抓取的外部网页合法链接 URL。
     """
-    try:
-        from app.services.ai.tools.system_tools import validate_url
-        validate_url(url)
-    except Exception as e:
-        return f"安全拦截：URL 校验未通过: {str(e)}"
-
-    media_dir = "data/uploads/media"
-    os.makedirs(media_dir, exist_ok=True)
-    snapshot_filename = f"web_{uuid.uuid4().hex[:12]}.png"
-    snapshot_path = os.path.join(media_dir, snapshot_filename)
-    
-    async with async_playwright() as p:
-        try:
-            browser = await p.chromium.launch(
-                headless=True,
-                args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
-            )
-            context = await browser.new_context(
-                viewport={"width": 1280, "height": 800},
-                user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            )
-            page = await context.new_page()
-            
-            await page.goto(url, wait_until="networkidle", timeout=25000)
-            await page.screenshot(path=snapshot_path, full_page=False)
-            
-            html_content = await page.content()
-            await browser.close()
-            
-            soup = BeautifulSoup(html_content, "html.parser")
-            for script_or_style in soup(["script", "style", "header", "footer", "nav", "iframe"]):
-                script_or_style.extract()
-                
-            text_lines = [line.strip() for line in soup.get_text().splitlines() if line.strip()]
-            cleaned_text = "\n".join(text_lines[:150])
-            
-            return (
-                f"### 网页渲染成功！\n"
-                f"📸 视觉截图已保存为媒体工件，物理路径：`{snapshot_path}`\n\n"
-                f"📝 **网页核心提取文本**：\n"
-                f"```text\n"
-                f"{cleaned_text}\n"
-                f"```"
-            )
-        except Exception as err:
-            return f"网页抓取渲染失败: {str(err)}"
+    _ = url
+    return (
+        "安全限制：动态浏览器抓取暂未开放。该能力必须迁移到默认断网、"
+        "仅经受控 egress proxy 出网的独立 Browser Worker 后才能恢复。"
+    )
 
 @tool
 def code_syntax_linter(code: str, language: str = "python") -> str:
@@ -238,20 +200,17 @@ async def fetch_static_web_url(url: str) -> str:
         url: 待抓取的外部静态网页合法链接 URL。
     """
     try:
-        from app.services.ai.tools.system_tools import validate_url
-        validate_url(url)
-    except Exception as e:
-        return f"安全拦截：URL 校验未通过: {str(e)}"
-        
-    try:
-        import httpx
         from bs4 import BeautifulSoup
         
         headers = {
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         }
-        async with httpx.AsyncClient(timeout=10.0, trust_env=False) as client:
-            response = await client.get(url, headers=headers, follow_redirects=True)
+        async with create_ssrf_safe_async_client(timeout=10.0) as client:
+            response = await get_with_ssrf_safe_redirects(
+                client,
+                url,
+                headers=headers,
+            )
             
             # 1. 应对 JSON 数据接口
             content_type = response.headers.get("Content-Type", "").lower()
@@ -334,14 +293,14 @@ def _parse_baidu_serp_html(html_content: str, max_results: int) -> List[Dict[str
 
 async def _extract_content_from_baidu_link(baidu_link: str) -> Optional[dict]:
     try:
-        import httpx
-        from app.services.ai.tools.system_tools import validate_url
-
         headers = {"User-Agent": _BAIDU_SEARCH_USER_AGENT}
-        async with httpx.AsyncClient(timeout=6.0, trust_env=False) as client:
-            response = await client.get(baidu_link, headers=headers, follow_redirects=True)
+        async with create_ssrf_safe_async_client(timeout=6.0) as client:
+            response = await get_with_ssrf_safe_redirects(
+                client,
+                baidu_link,
+                headers=headers,
+            )
             real_url = str(response.url)
-            validate_url(real_url)
 
             soup = BeautifulSoup(response.text, "html.parser")
             for script_or_style in soup(["script", "style", "header", "footer", "nav", "iframe"]):
@@ -455,8 +414,6 @@ async def web_search_baidu_http_raw(
     """
     使用 httpx 直接抓取百度结果页 HTML（无 Playwright），返回结构化结果。
     """
-    import httpx
-
     search_url = _baidu_search_url(query)
     headers = {
         "User-Agent": _BAIDU_SEARCH_USER_AGENT,
@@ -464,8 +421,12 @@ async def web_search_baidu_http_raw(
         "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
     }
     try:
-        async with httpx.AsyncClient(timeout=10.0, trust_env=False, follow_redirects=True) as client:
-            response = await client.get(search_url, headers=headers)
+        async with create_ssrf_safe_async_client(timeout=10.0) as client:
+            response = await get_with_ssrf_safe_redirects(
+                client,
+                search_url,
+                headers=headers,
+            )
             response.raise_for_status()
             html_content = response.text
     except Exception as e:
@@ -585,8 +546,6 @@ async def web_search_bing_http_raw(
 ) -> List[Dict[str, Any]]:
     """使用 httpx 抓取 Bing 结果页 HTML（无 Playwright）。"""
     import urllib.parse
-    import httpx
-
     search_url = (
         "https://www.bing.com/search?"
         f"q={urllib.parse.quote(query)}&setlang=zh-hans&mkt=zh-CN"
@@ -597,8 +556,12 @@ async def web_search_bing_http_raw(
         "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
     }
     try:
-        async with httpx.AsyncClient(timeout=10.0, trust_env=False, follow_redirects=True) as client:
-            response = await client.get(search_url, headers=headers)
+        async with create_ssrf_safe_async_client(timeout=10.0) as client:
+            response = await get_with_ssrf_safe_redirects(
+                client,
+                search_url,
+                headers=headers,
+            )
             response.raise_for_status()
             html_content = response.text
     except Exception as e:

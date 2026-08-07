@@ -5,9 +5,8 @@ Uses system-wide embed_* config for all callers (memory, metadata, examples).
 import logging
 from typing import List
 
-import httpx
-
 from app.services.config_service import ConfigService
+from app.utils.model_providers import create_model_outbound_client
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +78,11 @@ class EmbeddingClient:
             headers.pop("Authorization", None)
             headers["api-key"] = api_key
 
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with create_model_outbound_client(
+            provider=provider,
+            request_url=request_url,
+            timeout=60.0,
+        ) as client:
             resp = await client.post(request_url, json=payload, headers=headers)
             resp.raise_for_status()
             data = resp.json()

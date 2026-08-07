@@ -47,7 +47,13 @@ async def test_web_search_baidu_http_success():
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=None)
 
-    with patch("httpx.AsyncClient", return_value=mock_client):
+    with patch(
+        "app.services.ai.tools.advanced_auxiliary_tools.create_ssrf_safe_async_client",
+        return_value=mock_client,
+    ), patch(
+        "app.services.ai.tools.advanced_auxiliary_tools.get_with_ssrf_safe_redirects",
+        new=AsyncMock(return_value=mock_response),
+    ) as safe_get:
         result = await web_search_baidu_http.ainvoke(
             {"query": "南孜平台", "max_results": 2}
         )
@@ -57,8 +63,8 @@ async def test_web_search_baidu_http_success():
     assert "HTTP搜索标题二" in result
     assert "这是第一条 HTTP 搜索结果摘要" in result
     assert "http://example.com/link1" in result
-    mock_client.get.assert_awaited()
-    called_url = mock_client.get.await_args.args[0]
+    safe_get.assert_awaited()
+    called_url = safe_get.await_args.args[1]
     assert "baidu.com/s" in called_url
     assert "南孜" in called_url or "%E5%8D%97%E5%AD%9C" in called_url
 
@@ -75,7 +81,13 @@ async def test_web_search_baidu_http_no_results():
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=None)
 
-    with patch("httpx.AsyncClient", return_value=mock_client):
+    with patch(
+        "app.services.ai.tools.advanced_auxiliary_tools.create_ssrf_safe_async_client",
+        return_value=mock_client,
+    ), patch(
+        "app.services.ai.tools.advanced_auxiliary_tools.get_with_ssrf_safe_redirects",
+        new=AsyncMock(return_value=mock_response),
+    ):
         result = await web_search_baidu_http.ainvoke(
             {"query": "不存在的词", "max_results": 2}
         )

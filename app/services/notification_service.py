@@ -5,7 +5,6 @@ import hmac
 import hashlib
 import base64
 import urllib.parse
-import httpx
 import smtplib
 import asyncio
 from email.mime.text import MIMEText
@@ -16,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.models.user_notification_config import UserNotificationConfig
+from app.utils.outbound_url_policy import create_ssrf_safe_async_client
 
 logger = logging.getLogger(__name__)
 
@@ -155,7 +155,8 @@ class NotificationService:
                 string_to_sign = f'{timestamp}\n{secret}'
                 hmac_code = hmac.new(secret.encode('utf-8'), string_to_sign.encode('utf-8'), digestmod=hashlib.sha256).digest()
                 sign = urllib.parse.quote_plus(base64.b64encode(hmac_code))
-                target_url = f"{webhook_url}&timestamp={timestamp}&sign={sign}"
+                separator = "&" if "?" in webhook_url else "?"
+                target_url = f"{webhook_url}{separator}timestamp={timestamp}&sign={sign}"
 
             payload = {
                 "msgtype": "markdown",
@@ -165,8 +166,12 @@ class NotificationService:
                 }
             }
 
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with create_ssrf_safe_async_client(
+                allowed_url=target_url,
+                timeout=10.0,
+            ) as client:
                 response = await client.post(target_url, json=payload)
+                response.raise_for_status()
                 resp_data = response.json()
                 if resp_data.get("errcode") == 0:
                     return True, ""
@@ -188,8 +193,12 @@ class NotificationService:
                     "content": "### 消息通知连通性测试\n\n您的AI 智能体平台个人中心企业微信通知渠道已配置成功，测试消息发送正常。"
                 }
             }
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with create_ssrf_safe_async_client(
+                allowed_url=webhook_url,
+                timeout=10.0,
+            ) as client:
                 response = await client.post(webhook_url, json=payload)
+                response.raise_for_status()
                 resp_data = response.json()
                 if resp_data.get("errcode") == 0:
                     return True, ""
@@ -271,7 +280,8 @@ class NotificationService:
                 string_to_sign = f'{timestamp}\n{secret}'
                 hmac_code = hmac.new(secret.encode('utf-8'), string_to_sign.encode('utf-8'), digestmod=hashlib.sha256).digest()
                 sign = urllib.parse.quote_plus(base64.b64encode(hmac_code))
-                target_url = f"{webhook_url}&timestamp={timestamp}&sign={sign}"
+                separator = "&" if "?" in webhook_url else "?"
+                target_url = f"{webhook_url}{separator}timestamp={timestamp}&sign={sign}"
 
             payload = {
                 "msgtype": "markdown",
@@ -281,8 +291,12 @@ class NotificationService:
                 }
             }
 
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with create_ssrf_safe_async_client(
+                allowed_url=target_url,
+                timeout=10.0,
+            ) as client:
                 response = await client.post(target_url, json=payload)
+                response.raise_for_status()
                 resp_data = response.json()
                 if resp_data.get("errcode") == 0:
                     return True, ""
@@ -301,8 +315,13 @@ class NotificationService:
             return False, "用户未启用企业微信通知"
         try:
             payload = {"msgtype": "markdown", "markdown": {"content": f"### {title}\n\n{content}"}}
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.post(config["webhook_url"], json=payload)
+            webhook_url = config["webhook_url"]
+            async with create_ssrf_safe_async_client(
+                allowed_url=webhook_url,
+                timeout=10.0,
+            ) as client:
+                response = await client.post(webhook_url, json=payload)
+                response.raise_for_status()
                 data = response.json()
             return (True, "") if data.get("errcode") == 0 else (False, str(data.get("errmsg") or data))
         except Exception as exc:

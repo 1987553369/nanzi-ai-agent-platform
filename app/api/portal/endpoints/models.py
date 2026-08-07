@@ -21,6 +21,7 @@ from app.schemas.ai_model import (
 from app.utils.model_credentials import encrypt_model_api_key, decrypt_model_api_key
 from app.utils.model_providers import (
     azure_openai_request_config,
+    create_model_outbound_client,
     default_model_api_base_url,
     resolve_model_api_base_url,
 )
@@ -35,6 +36,34 @@ _SYSTEM_CONFIGS_TABLE = Table(
     Column("value", Text),
     Column("is_secret", Boolean),
 )
+
+
+def _model_url_origin(url: str) -> tuple[str, str, int]:
+    try:
+        parsed = urlsplit(str(url or "").strip())
+        port = parsed.port
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="API Base URL 格式无效") from exc
+    if parsed.scheme.lower() not in {"http", "https"} or not parsed.hostname:
+        raise HTTPException(status_code=400, detail="API Base URL 必须是有效的 HTTP/HTTPS 地址")
+    hostname = parsed.hostname.rstrip(".").lower().encode("idna").decode("ascii")
+    return (
+        parsed.scheme.lower(),
+        hostname,
+        port or (443 if parsed.scheme.lower() == "https" else 80),
+    )
+
+
+def _assert_stored_model_key_audience(
+    model: AIModel,
+    *,
+    provider: str,
+    target_base_url: str,
+) -> None:
+    if str(model.provider or "").strip().lower() != str(provider or "").strip().lower():
+        raise HTTPException(status_code=400, detail="已保存的 API Key 不能跨 Provider 复用")
+    if _model_url_origin(model.api_base_url or "") != _model_url_origin(target_base_url):
+        raise HTTPException(status_code=400, detail="已保存的 API Key 不能发送到其他 Origin")
 
 
 async def _ensure_model_id_available(
@@ -81,15 +110,26 @@ async def discover_models(
             detail="Azure OpenAI 不支持通用模型列表发现，请手工填写部署名称（model_id）。",
         )
 
-    api_key = (request.api_key or "").strip()
-    if not api_key and request.model_config_id:
-        existing = await db.get(AIModel, request.model_config_id)
-        if existing:
-            api_key = decrypt_model_api_key(existing.api_key) or ""
-
-    base_url = resolve_model_api_base_url(request.provider, request.api_base_url)
+    existing = (
+        await db.get(AIModel, request.model_config_id)
+        if request.model_config_id
+        else None
+    )
+    configured_url = request.api_base_url
+    if not configured_url and existing and existing.provider == request.provider:
+        configured_url = existing.api_base_url
+    base_url = resolve_model_api_base_url(request.provider, configured_url)
     if not base_url:
         raise HTTPException(status_code=400, detail="请填写 API Base URL")
+
+    api_key = (request.api_key or "").strip()
+    if not api_key and existing:
+        _assert_stored_model_key_audience(
+            existing,
+            provider=request.provider,
+            target_base_url=base_url,
+        )
+        api_key = decrypt_model_api_key(existing.api_key) or ""
 
     parsed = urlparse(base_url)
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
@@ -105,10 +145,10 @@ async def discover_models(
         request_url = f"{parsed.scheme}://{parsed.netloc}/api/v1/deployments/models"
         request_params = {"page_no": 1, "page_size": 100, "version": "v1.0", "model_source": "base"}
     try:
-        async with httpx.AsyncClient(
+        async with create_model_outbound_client(
+            provider=request.provider,
+            request_url=request_url,
             timeout=10.0,
-            follow_redirects=False,
-            trust_env=False,
         ) as client:
             if request_params:
                 response = await client.get(request_url, headers=headers, params=request_params)
@@ -472,10 +512,10 @@ async def _test_embedding_connection(
     elif api_key:
         headers["Authorization"] = f"Bearer {api_key}"
 
-    async with httpx.AsyncClient(
+    async with create_model_outbound_client(
+        provider=provider,
+        request_url=request_url,
         timeout=15.0,
-        follow_redirects=False,
-        trust_env=False,
     ) as client:
         response = await client.post(
             request_url,
@@ -503,18 +543,33 @@ async def test_model_config(
     user: Dict = Depends(require_permission("element", "element:system:config_save")),
 ):
     """Test a model configuration from the add/edit form without saving it."""
+    existing = (
+        await db.get(AIModel, request.model_config_id)
+        if request.model_config_id
+        else None
+    )
+    configured_url = request.api_base_url
+    if not configured_url and existing and existing.provider == request.provider:
+        configured_url = existing.api_base_url
+    resolved_base_url = resolve_model_api_base_url(request.provider, configured_url)
+
     api_key = (request.api_key or "").strip() or None
-    if not api_key and request.model_config_id:
-        existing = await db.get(AIModel, request.model_config_id)
-        if existing:
-            api_key = decrypt_model_api_key(existing.api_key) or None
+    if not api_key and existing:
+        if not resolved_base_url:
+            raise HTTPException(status_code=400, detail="请填写 API Base URL")
+        _assert_stored_model_key_audience(
+            existing,
+            provider=request.provider,
+            target_base_url=resolved_base_url,
+        )
+        api_key = decrypt_model_api_key(existing.api_key) or None
 
     return await _test_model_connection(
         model_id=request.model_id,
         model_type=request.type,
         provider=request.provider,
         api_key=api_key,
-        api_base_url=resolve_model_api_base_url(request.provider, request.api_base_url),
+        api_base_url=resolved_base_url,
         context_size=request.context_size,
         max_output_tokens=request.max_output_tokens,
     )

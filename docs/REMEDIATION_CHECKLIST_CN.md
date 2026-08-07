@@ -52,7 +52,7 @@
 |---|---|---|
 | AUTH-P0-02 | 第三方跨域 Embed 仍需要短期、限受众 Embed Token 签发/撤销服务 | 新增 Token 表/签发接口、Origin/Agent 绑定、TTL、撤销和审计后再开放生产跨域嵌入 |
 | SEC-P0-02 | 代码执行当前只做了权限止血，执行进程仍在平台边界内 | 独立 Worker/Queue，非 root、只读根、无 Secret、网络/CPU/内存/PID/超时策略 |
-| NET-P0-02 | MCP 已完成应用层 IP Pinning，但其他 Generic API、模型发现、Webhook、通知等出网点尚未统一接入，且生产环境仍缺网络层纵深防御 | 将统一安全 Client 扩展到所有用户可配置 URL；部署 egress proxy/NetworkPolicy 并做跨协议重绑定演练 |
+| NET-P0-02 | MCP、用户 HTTP 工具、公开网页抓取、Generic API、模型发现/Embedding 和 HTTP Webhook 已接入固定解析；动态浏览器任意 URL 已 fail-closed。RAGFlow、OpenClaw、External SQL、SSO、AgentScope 模型 SDK、SMTP 及生产网络层仍待治理 | 为受信内网集成建立显式 Host/网段审批与凭据 Audience；Browser Worker、egress proxy/NetworkPolicy、SMTP 固定解析和跨协议重绑定演练 |
 
 ## 四、产品与平台完善（2-9 个月）
 
@@ -101,3 +101,5 @@
 | 2026-08-07 | MCP-A 验证 | Python 3.11 凭据状态机/安全契约 29 项及迁移清单契约 25 项通过；MCP 前端专项 31 项及 `tests/frontend` 全量 320 项通过；`npm run build` 完整通过（10,386 个模块）；Python 编译和 `git diff --check` 通过；未执行任何实际数据库迁移 |
 | 2026-08-07 | NET-A | 新增固定解析 HTTP Transport：每次请求只解析一次并校验全部 A/AAAA，实际连接使用已验证公网 IP，原域名保留为 Host/SNI/证书校验名称；连接池按原域名和 IP 隔离；MCP 探测、SSE SDK 与 Direct HTTP 全部接入；禁止重定向和跨 Origin 后续 endpoint |
 | 2026-08-07 | NET-A 验证 | Python 3.11 URL Policy、固定解析、MCP 安全及凭据状态机契约 56 项通过；迁移相关契约 19 项、`tests/frontend` 全量 320 项通过；`httpx` 下限收敛到已验证的 0.27；Python 编译和 `git diff --check` 通过；本机缺少 MCP SDK 和必填集成环境，未执行真实远端 MCP 联调 |
+| 2026-08-07 | NET-B | 用户 HTTP 工具、公开网页抓取/搜索、Generic API、模型发现与 Embedding、个人 HTTP Webhook 统一接入固定解析；安全重定向逐跳校验并在跨 Origin 时剥离凭据；模型存量 Key 绑定 Provider/Origin；动态 Host 模板被禁止，动态 Playwright 任意 URL 在独立 Browser Worker 建成前 fail-closed；日志移除查询值和参数值 |
+| 2026-08-07 | NET-B 验证 | Python 3.11 固定解析、重定向、可配置出网、MCP 与凭据安全契约 65 项通过；迁移契约 19 项、`tests/frontend` 全量 320 项通过；`npm run build` 完整通过（10,386 个模块），本批变更 Python 文件编译和 `git diff --check` 通过。本机缺少 `aiomysql`、MCP SDK 和完整 Python 3.11 原生依赖，工具/模型 API 集成测试已更新但需标准 CI 回归；未连接真实外部服务、数据库或执行部署 |

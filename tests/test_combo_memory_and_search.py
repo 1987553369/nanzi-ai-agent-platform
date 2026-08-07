@@ -164,8 +164,7 @@ async def test_combo_baidu_search_and_extract():
 
     mock_client = AsyncMock()
     mock_client.__aenter__.return_value = mock_client
-    # 模拟重定向跟踪行为，第 1 个链接返回真实网页 1
-    mock_client.get = AsyncMock(side_effect=[
+    safe_get = AsyncMock(side_effect=[
         MockResponse("https://yovole.com/nanzi-intro", mock_page_html_1),
         MockResponse("https://baidu.com/wiki-op", "智能运营百科，主要用于效率提升。")
     ])
@@ -174,11 +173,11 @@ async def test_combo_baidu_search_and_extract():
         "app.services.ai.tools.advanced_auxiliary_tools.async_playwright",
         return_value=mock_playwright_context
     ), patch(
-        "httpx.AsyncClient",
+        "app.services.ai.tools.advanced_auxiliary_tools.create_ssrf_safe_async_client",
         return_value=mock_client
     ), patch(
-        "app.services.ai.tools.system_tools.validate_url",
-        return_value=True
+        "app.services.ai.tools.advanced_auxiliary_tools.get_with_ssrf_safe_redirects",
+        new=safe_get,
     ):
         result = await web_search_baidu.ainvoke({"query": "南孜平台", "max_results": 2})
         

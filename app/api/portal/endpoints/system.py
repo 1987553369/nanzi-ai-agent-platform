@@ -8,6 +8,10 @@ from app.services.config_service import ConfigService
 from app.schemas.branding import BrandingSettingsUpdate
 from app.services.branding_settings_service import BrandingSettingsService
 from app.schemas.system_config import ConfigHistoryItem
+from app.utils.outbound_url_policy import (
+    create_ssrf_safe_async_client,
+    redact_outbound_url_for_log,
+)
 import logging
 import asyncio
 import traceback
@@ -142,7 +146,7 @@ async def test_connection(
             test_key = (test_key or "").strip()
             test_model = (test_model or "").strip()
             
-            log(f"API URL: {test_url}")
+            log(f"API Origin: {redact_outbound_url_for_log(test_url)}")
             log(f"Model Name: {test_model}")
             
             if not test_url or not test_key:
@@ -156,13 +160,18 @@ async def test_connection(
             else:
                 url = f"{base}/v1/embeddings"
                 
-            log(f"Sending test vector request to: {url}")
+            log(
+                "Sending test vector request to: "
+                f"{redact_outbound_url_for_log(url)}"
+            )
             
-            import httpx
             headers = {"Authorization": f"Bearer {test_key}", "Content-Type": "application/json"}
             payload_data = {"model": test_model, "input": "hello"}
             
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with create_ssrf_safe_async_client(
+                allowed_url=url,
+                timeout=10.0,
+            ) as client:
                 resp = await client.post(url, json=payload_data, headers=headers)
                 resp.raise_for_status()
                 data = resp.json()
@@ -727,4 +736,3 @@ async def manual_cleanup_logs(
     except Exception as e:
         logging.error(f"Failed to cleanup logs: {e}")
         raise HTTPException(status_code=500, detail=f"清理历史日志失败: {str(e)}")
-

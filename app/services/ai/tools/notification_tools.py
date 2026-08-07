@@ -1,11 +1,5 @@
 import logging
 import json
-import time
-import hmac
-import hashlib
-import base64
-import urllib.parse
-import httpx
 from typing import Any, Dict, Optional, Type
 from app.services.ai.tools.tool_compat import BaseTool
 from pydantic import BaseModel, Field
@@ -28,60 +22,25 @@ class send_dingtalk_message(BaseTool):
 
     async def _arun(self, title: str, content: str) -> str:
         """Use the tool asynchronously."""
-        webhook_url = None
-        secret = None
-        
-        # Directly retrieve from user's personal notification config
         from app.core.context import get_current_agent_context
         from app.core.orm import AsyncSessionLocal
         from app.services.notification_service import NotificationService
-        
-        agent_ctx = get_current_agent_context()
-        if agent_ctx and agent_ctx.user_id:
-            try:
-                async with AsyncSessionLocal() as db:
-                    db_record = await NotificationService.get_config_by_type_raw(db, agent_ctx.user_id, "dingtalk")
-                    if db_record and db_record.config_json:
-                        user_cfg = json.loads(db_record.config_json)
-                        if user_cfg.get("is_enabled"):
-                            webhook_url = user_cfg.get("webhook_url")
-                            secret = user_cfg.get("secret")
-                        else:
-                            return "Error: DingTalk notification is disabled. Please enable it in Personal Center -> Message Notifications."
-            except Exception as e:
-                logger.error(f"Failed to load user personal DingTalk config: {e}", exc_info=True)
 
-        if not webhook_url:
-            logger.warning(f"DingTalk Tool: Webhook URL missing in user personal settings.")
+        agent_ctx = get_current_agent_context()
+        if not agent_ctx or not agent_ctx.user_id:
             return "Error: DingTalk Webhook URL not configured. Please go to Personal Center -> Message Notifications and set it."
 
-
         try:
-            target_url = webhook_url
-            if secret:
-                timestamp = str(round(time.time() * 1000))
-                string_to_sign = f'{timestamp}\n{secret}'
-                hmac_code = hmac.new(secret.encode('utf-8'), string_to_sign.encode('utf-8'), digestmod=hashlib.sha256).digest()
-                sign = urllib.parse.quote_plus(base64.b64encode(hmac_code))
-                target_url = f"{webhook_url}&timestamp={timestamp}&sign={sign}"
-
-            payload = {
-                "msgtype": "markdown",
-                "markdown": {
-                    "title": title,
-                    "text": f"### {title}\n\n{content}"
-                }
-            }
-
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.post(target_url, json=payload)
-                resp_data = response.json()
-                
-                if resp_data.get("errcode") == 0:
-                    return f"Successfully sent DingTalk message: {title}"
-                else:
-                    return f"Failed to send DingTalk message: {resp_data.get('errmsg')} (Code: {resp_data.get('errcode')})"
-
+            async with AsyncSessionLocal() as db:
+                success, error = await NotificationService.send_dingtalk(
+                    db,
+                    agent_ctx.user_id,
+                    title,
+                    content,
+                )
+            if success:
+                return f"Successfully sent DingTalk message: {title}"
+            return f"Failed to send DingTalk message: {error}"
         except Exception as e:
             logger.error(f"DingTalk Tool Error: {e}", exc_info=True)
             return f"Error executing DingTalk tool: {str(e)}"
@@ -195,48 +154,25 @@ class send_wechat_work_message(BaseTool):
 
     async def _arun(self, content: str) -> str:
         """Use the tool asynchronously."""
-        webhook_url = None
-        
-        # Directly retrieve from user's personal notification config
         from app.core.context import get_current_agent_context
         from app.core.orm import AsyncSessionLocal
         from app.services.notification_service import NotificationService
-        
-        agent_ctx = get_current_agent_context()
-        if agent_ctx and agent_ctx.user_id:
-            try:
-                async with AsyncSessionLocal() as db:
-                    db_record = await NotificationService.get_config_by_type_raw(db, agent_ctx.user_id, "wechat_work")
-                    if db_record and db_record.config_json:
-                        user_cfg = json.loads(db_record.config_json)
-                        if user_cfg.get("is_enabled"):
-                            webhook_url = user_cfg.get("webhook_url")
-                        else:
-                            return "Error: WeChat Work notification is disabled. Please enable it in Personal Center -> Message Notifications."
-            except Exception as e:
-                logger.error(f"Failed to load user personal WeChat Work config: {e}", exc_info=True)
 
-        if not webhook_url:
-            logger.warning(f"WeChat Work Tool: Webhook URL missing in user personal settings.")
+        agent_ctx = get_current_agent_context()
+        if not agent_ctx or not agent_ctx.user_id:
             return "Error: WeChat Work Webhook URL not configured. Please go to Personal Center -> Message Notifications and set it."
 
         try:
-            payload = {
-                "msgtype": "markdown",
-                "markdown": {
-                    "content": content
-                }
-            }
-
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.post(webhook_url, json=payload)
-                resp_data = response.json()
-                
-                if resp_data.get("errcode") == 0:
-                    return f"Successfully sent WeChat Work message."
-                else:
-                    return f"Failed to send WeChat Work message: {resp_data.get('errmsg')} (Code: {resp_data.get('errcode')})"
-
+            async with AsyncSessionLocal() as db:
+                success, error = await NotificationService.send_wechat_work(
+                    db,
+                    agent_ctx.user_id,
+                    "智能体通知",
+                    content,
+                )
+            if success:
+                return "Successfully sent WeChat Work message."
+            return f"Failed to send WeChat Work message: {error}"
         except Exception as e:
             logger.error(f"WeChat Work Tool Error: {e}", exc_info=True)
             return f"Error executing WeChat Work tool: {str(e)}"

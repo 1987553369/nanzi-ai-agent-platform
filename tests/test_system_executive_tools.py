@@ -194,11 +194,14 @@ async def test_fetch_static_web_url_flow():
     """
     
     mock_client = AsyncMock()
-    mock_client.get.return_value = mock_response
-    
-    with patch("app.services.ai.tools.system_tools.validate_url", return_value=True), \
-         patch("httpx.AsyncClient") as mock_class:
-        mock_class.return_value.__aenter__.return_value = mock_client
+
+    with patch(
+        "app.services.ai.tools.advanced_auxiliary_tools.create_ssrf_safe_async_client"
+    ) as client_factory, patch(
+        "app.services.ai.tools.advanced_auxiliary_tools.get_with_ssrf_safe_redirects",
+        new=AsyncMock(return_value=mock_response),
+    ):
+        client_factory.return_value.__aenter__.return_value = mock_client
         res = await fetch_static_web_url.ainvoke({"url": "https://example.com/news"})
         
     assert "静态网页拉取成功" in res
@@ -212,7 +215,8 @@ async def test_fetch_static_web_url_ssrf():
     from app.services.ai.tools.advanced_auxiliary_tools import fetch_static_web_url
     
     res = await fetch_static_web_url.ainvoke({"url": "http://127.0.0.1:8080/admin"})
-    assert "安全拦截：URL 校验未通过" in res
+    assert "静态抓取失败" in res
+    assert "不是公网" in res
 
 
 def test_create_skills_tool(tmp_path):

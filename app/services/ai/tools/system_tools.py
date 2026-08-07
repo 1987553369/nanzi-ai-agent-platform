@@ -1,17 +1,18 @@
 import logging
-import httpx
 import json
-import ipaddress
-import socket
 import pytz
 from datetime import datetime
-from urllib.parse import urlparse
 from app.services.ai.tools.tool_compat import tool
 from app.services.ai.tools.task_manager_tools import (
     create_recurring_task, get_my_tasks, cancel_task, 
     start_task, pause_task, run_task_manually
 )
 from app.services.ai.tools.notification_tools import send_dingtalk_message
+from app.utils.outbound_url_policy import (
+    create_ssrf_safe_async_client,
+    redact_outbound_url_for_log,
+    validate_outbound_http_url,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -34,42 +35,9 @@ def get_current_model() -> str:
     return json.dumps(info, ensure_ascii=False)
 
 def validate_url(url: str) -> bool:
-    """
-    Validates URL to prevent SSRF attacks by blocking internal IP ranges.
-    Returns True if safe, raises ValueError if unsafe.
-    """
-    try:
-        parsed = urlparse(url)
-        hostname = parsed.hostname
-        if not hostname:
-            raise ValueError("Invalid URL: missing hostname")
-
-        # Resolve hostname to IP
-        try:
-            ip_str = socket.gethostbyname(hostname)
-        except socket.gaierror:
-            # If we can't resolve it, it might be unreachable, but strict SSRF usually implies blocking it.
-            # However, for a general tool, if it doesn't resolve, httpx will fail anyway.
-            # But to be safe against DNS rebinding, we should resolve here.
-            raise ValueError(f"Could not resolve hostname: {hostname}")
-
-        ip = ipaddress.ip_address(ip_str)
-
-        # Block loopback, private, link-local, multicast
-        # Note: 198.18.0.0/15 is considered private by some python versions but is often used by
-        # transparent proxies or benchmarking. We allow it to support tools like httpbin.org
-        is_benchmark = ip in ipaddress.ip_network('198.18.0.0/15')
-
-        if not is_benchmark and (ip.is_loopback or 
-            ip.is_private or 
-            ip.is_link_local or 
-            ip.is_multicast):
-            raise ValueError(f"Access to internal/private IP {ip_str} ({hostname}) is restricted.")
-            
-        return True
-    except Exception as e:
-        logger.warning(f"URL Validation Failed: {e}")
-        raise e
+    """Compatibility preflight; DNS enforcement happens in the pinned transport."""
+    validate_outbound_http_url(url)
+    return True
 
 @tool
 async def system_http_request(method: str, url: str, headers: dict = None, body: dict = None, params: dict = None) -> str:
@@ -96,8 +64,16 @@ async def system_http_request(method: str, url: str, headers: dict = None, body:
 
         timeout = 30.0
         
-        async with httpx.AsyncClient(timeout=timeout, trust_env=False) as client:
-            logger.info(f"[SystemTool] {method} {url} Params={params}")
+        async with create_ssrf_safe_async_client(
+            allowed_url=url,
+            timeout=timeout,
+        ) as client:
+            logger.info(
+                "[SystemTool] %s %s parameter_keys=%s",
+                method,
+                redact_outbound_url_for_log(url),
+                sorted((params or {}).keys()),
+            )
             
             if method == "GET":
                 response = await client.get(url, params=params, headers=headers)

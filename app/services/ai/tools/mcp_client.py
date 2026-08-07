@@ -18,6 +18,7 @@ from app.utils.mcp_credentials import (
 from app.utils.outbound_url_policy import (
     OutboundUrlPolicyError,
     create_ssrf_safe_async_client,
+    redact_outbound_url_for_log,
 )
 from sqlalchemy import select, update
 
@@ -95,7 +96,12 @@ class McpSseSession:
 
             # Debug: Log header keys (redacted)
             header_keys = list(self.auth_headers.keys())
-            logger.info(f"[MCP] Connecting to {self.server_id} at {self.sse_url}. Headers keys present: {header_keys}")
+            logger.info(
+                "[MCP] Connecting to %s at %s. Header keys present: %s",
+                self.server_id,
+                redact_outbound_url_for_log(self.sse_url),
+                header_keys,
+            )
             try:
                 from contextlib import AsyncExitStack
                 self._exit_stack = AsyncExitStack()
@@ -442,7 +448,13 @@ class McpClientService:
         if rpc_id is not None:
             payload["id"] = rpc_id
 
-        logger.debug(f"[MCP-Direct] Request: {method} to {session_mgr.sse_url} | RPC ID: {rpc_id} | Headers keys: {list(headers.keys())}")
+        logger.debug(
+            "[MCP-Direct] Request: %s to %s | RPC ID: %s | Header keys: %s",
+            method,
+            redact_outbound_url_for_log(session_mgr.sse_url),
+            rpc_id,
+            list(headers.keys()),
+        )
         async with create_ssrf_safe_async_client(
             allowed_url=session_mgr.sse_url,
             timeout=30.0,

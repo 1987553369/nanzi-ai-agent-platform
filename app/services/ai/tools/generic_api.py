@@ -1,11 +1,15 @@
 import logging
-import httpx
 import json
 from typing import Dict, Any, Type
+from urllib.parse import quote, urlsplit
 from pydantic import create_model, Field
 from app.services.ai.tools.tool_compat import StructuredTool
 from app.models.tool import SysApiTool
 from app.services.ai.grounding.models import EvidenceType
+from app.utils.outbound_url_policy import (
+    create_ssrf_safe_async_client,
+    redact_outbound_url_for_log,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -126,14 +130,21 @@ class GenericApiToolFactory:
         """
         Executes the HTTP request.
         """
-        url = config.url_template
+        url = str(config.url_template or "").strip()
+        template_parts = urlsplit(url)
+        if any(
+            marker in value
+            for value in (template_parts.scheme, template_parts.netloc)
+            for marker in ("{", "}")
+        ):
+            return "[Execution Error] URL 模板不允许动态修改协议、主机或端口"
         
         # 1. Path Substitution
         path_params = {}
         for key, value in params.items():
             placeholder = f"{{{key}}}"
             if placeholder in url:
-                url = url.replace(placeholder, str(value))
+                url = url.replace(placeholder, quote(str(value), safe=""))
                 path_params[key] = value
         
         # Filter out path params from remaining params
@@ -154,12 +165,21 @@ class GenericApiToolFactory:
         # 3. Request
         method = config.method.upper()
         
-        logger.info(f"[GenericTool] Executing {config.name} ({method} {url}) with params: {remaining_params}")
+        logger.info(
+            "[GenericTool] Executing %s (%s %s) parameter_keys=%s",
+            config.name,
+            method,
+            redact_outbound_url_for_log(url),
+            sorted(remaining_params.keys()),
+        )
         
         try:
             # We disable trust_env=True to avoid SOCKS proxy issues if dependency is missing
             # If explicit proxy is needed, it should be configured in settings or handled via specific client config.
-            async with httpx.AsyncClient(timeout=30.0, trust_env=False) as client:
+            async with create_ssrf_safe_async_client(
+                allowed_url=url,
+                timeout=30.0,
+            ) as client:
                 if method == "GET":
                     response = await client.get(url, params=remaining_params, headers=headers)
                 elif method in ["POST", "PUT", "PATCH", "DELETE"]:

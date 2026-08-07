@@ -258,13 +258,6 @@ async def _send_task_failure_alert(
 ) -> None:
     try:
         from app.services.notification_service import NotificationService
-        import time
-        import hmac
-        import hashlib
-        import base64
-        import urllib.parse
-        import httpx
-
         async with AsyncSessionLocal() as db:
             record = await NotificationService.get_config_by_type_raw(db, user_id, "dingtalk")
             if not record or not record.config_json:
@@ -272,16 +265,6 @@ async def _send_task_failure_alert(
             cfg = json.loads(record.config_json)
             if not cfg.get("is_enabled") or not cfg.get("webhook_url"):
                 return
-
-            webhook_url = cfg.get("webhook_url")
-            secret = cfg.get("secret")
-            target_url = webhook_url
-            if secret:
-                timestamp = str(round(time.time() * 1000))
-                string_to_sign = f"{timestamp}\n{secret}"
-                hmac_code = hmac.new(secret.encode("utf-8"), string_to_sign.encode("utf-8"), digestmod=hashlib.sha256).digest()
-                sign = urllib.parse.quote_plus(base64.b64encode(hmac_code))
-                target_url = f"{webhook_url}&timestamp={timestamp}&sign={sign}"
 
             title = f"TaskCenter 任务失败：{task.name}"
             content = (
@@ -293,13 +276,18 @@ async def _send_task_failure_alert(
                 f"- 错误原因：{error}\n"
                 f"- 时间：{_now_iso()}"
             )
-            payload = {"msgtype": "markdown", "markdown": {"title": title, "text": content}}
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                resp = await client.post(target_url, json=payload)
-                data = resp.json()
-                if data.get("errcode") != 0:
-                    logger.warning("Task failure alert failed for task %s: %s", task.id, data)
-                    return
+            sent, delivery_error = await NotificationService._send_dingtalk_msg_real(
+                cfg,
+                title,
+                content,
+            )
+            if not sent:
+                logger.warning(
+                    "Task failure alert failed for task %s: %s",
+                    task.id,
+                    delivery_error,
+                )
+                return
 
         metrics["last_alert_at"] = _now_iso()
         async with AsyncSessionLocal() as db:

@@ -61,14 +61,21 @@ AgentScope Toolkit
 
 - `data/uploads` 与 `data/branding` 整目录无鉴权静态公开，见 `app/main.py:353-360`。
 - SPA fallback 直接拼接用户路径，存在目录穿越，见 `app/main.py:363-372`。
-- URL fetch 首次解析只检查一个 IPv4，重定向和 AAAA/DNS rebinding 未覆盖；Playwright 子资源不限且使用 `--no-sandbox`。
+- 静态 URL fetch 已固定解析，跨跳转重新校验 A/AAAA，跨 Origin 剥离认证 Header；任意 URL
+  的 Playwright 动态抓取已 fail-closed。固定搜索页 Playwright 仍在主进程且使用 `--no-sandbox`。
 - Skill/archive 上传必须限制压缩展开大小、文件数、路径穿越、符号链接和可执行内容。
 
 文件应改为授权下载接口或短期 capability URL；浏览器放入低权隔离容器并对所有 request 逐个做 egress 校验。
 
 ## 6. Generic API 与通知
 
-Generic API、模型发现/测试、通知 webhook、Jira、SSO 都是服务端出网点。统一安全 egress client 应提供：协议与域白名单、DNS/IP 校验、逐跳重定向校验、超时/响应上限、代理策略、凭据注入、日志脱敏、熔断和审计。当前各模块分别创建 `httpx.AsyncClient`，策略不一致。
+`NET-B` 已将 Generic API、系统 HTTP 工具、公开网页抓取、模型发现/Embedding 和个人 HTTP
+Webhook 接入固定解析 Client；动态 URL 模板不得修改 Origin，模型存量 Key 绑定 Provider/Origin，
+跨 Origin 重定向剥离认证 Header，日志不记录查询值和参数值。固定本机 Ollama
+`localhost:11434` 是代码限定的唯一私网例外。
+
+剩余出网治理：RAGFlow、OpenClaw、External SQL、SSO、AgentScope 模型 SDK 和 SMTP；这些路径
+需要显式内网 Host/网段审批、凭据 Audience、响应字节上限、熔断/审计以及生产 egress 策略。
 
 ## 7. 工具治理目标
 

@@ -385,7 +385,10 @@ async def test_model_discovery_uses_provider_default_and_returns_model_options(
             FakeClient.last_headers = headers
             return FakeResponse()
 
-    monkeypatch.setattr("app.api.portal.endpoints.models.httpx.AsyncClient", FakeClient)
+    monkeypatch.setattr(
+        "app.api.portal.endpoints.models.create_model_outbound_client",
+        FakeClient,
+    )
 
     response = await client.post(
         "/api/portal/models/discover",
@@ -436,7 +439,10 @@ async def test_dashscope_discovery_uses_official_catalog_endpoint(
             FakeClient.last_params = params
             return FakeResponse()
 
-    monkeypatch.setattr("app.api.portal.endpoints.models.httpx.AsyncClient", FakeClient)
+    monkeypatch.setattr(
+        "app.api.portal.endpoints.models.create_model_outbound_client",
+        FakeClient,
+    )
 
     response = await client.post(
         "/api/portal/models/discover",
@@ -456,3 +462,71 @@ async def test_dashscope_discovery_uses_official_catalog_endpoint(
         "version": "v1.0",
         "model_source": "base",
     }
+
+
+@pytest.mark.asyncio
+async def test_discovery_cannot_send_stored_key_to_different_origin(
+    client: AsyncClient,
+    admin_headers,
+):
+    created = await client.post(
+        "/api/portal/models",
+        json={
+            "name": "Origin-bound discovery model",
+            "model_id": f"origin-bound-discovery-{uuid.uuid4().hex}",
+            "provider": "deepseek",
+            "type": "llm",
+            "api_base_url": "https://api.deepseek.com/v1",
+            "api_key": "sk-origin-bound",
+        },
+        headers=admin_headers,
+    )
+    assert created.status_code == 200
+
+    response = await client.post(
+        "/api/portal/models/discover",
+        json={
+            "provider": "deepseek",
+            "api_base_url": "https://attacker.example/v1",
+            "model_config_id": created.json()["id"],
+        },
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 400
+    assert "不能发送到其他 Origin" in response.text
+
+
+@pytest.mark.asyncio
+async def test_model_test_cannot_reuse_stored_key_across_provider(
+    client: AsyncClient,
+    admin_headers,
+):
+    created = await client.post(
+        "/api/portal/models",
+        json={
+            "name": "Provider-bound model",
+            "model_id": f"provider-bound-{uuid.uuid4().hex}",
+            "provider": "deepseek",
+            "type": "embedding",
+            "api_base_url": "https://api.deepseek.com/v1",
+            "api_key": "sk-provider-bound",
+        },
+        headers=admin_headers,
+    )
+    assert created.status_code == 200
+
+    response = await client.post(
+        "/api/portal/models/test-config",
+        json={
+            "provider": "openai",
+            "type": "embedding",
+            "model_id": "text-embedding-3-small",
+            "api_base_url": "https://api.openai.com/v1",
+            "model_config_id": created.json()["id"],
+        },
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 400
+    assert "不能跨 Provider 复用" in response.text

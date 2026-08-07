@@ -128,14 +128,17 @@ async def test_global_embed_connection_api():
     mock_client = MagicMock()
     mock_client.post = AsyncMock(return_value=mock_resp)
 
-    # Use AsyncContextManager mock for httpx.AsyncClient
+    # Use AsyncContextManager mock for the pinned outbound client
     class MockClientContext:
         async def __aenter__(self):
             return mock_client
         async def __aexit__(self, exc_type, exc_val, exc_tb):
             pass
 
-    with patch("httpx.AsyncClient", return_value=MockClientContext()), \
+    with patch(
+        "app.api.portal.endpoints.system.create_ssrf_safe_async_client",
+        return_value=MockClientContext(),
+    ), \
          patch("app.api.portal.endpoints.system.require_permission", return_value=lambda x: None):
         res = await system_test_connection(
             component="global_embed",

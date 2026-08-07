@@ -1,7 +1,7 @@
 import pytest
 import json
 import httpx
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import AsyncMock, patch
 from app.services.ai.tools.generic_api import GenericApiToolFactory
 from app.models.tool import SysApiTool
 from app.services.ai.grounding.models import EvidenceType
@@ -47,7 +47,12 @@ async def test_execute_request_get_with_path_substitution(mock_tool_config):
     """测试 GET 请求：路径参数替换与查询参数拼接"""
     params = {"user_id": 123, "include_details": True}
     
-    with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get:
+    with patch(
+        "app.services.ai.tools.generic_api.create_ssrf_safe_async_client"
+    ) as client_factory:
+        mock_client = AsyncMock()
+        client_factory.return_value.__aenter__.return_value = mock_client
+        mock_get = mock_client.get
         mock_get.return_value = httpx.Response(200, json={"id": 123, "name": "John"})
         
         result = await GenericApiToolFactory._execute_request(mock_tool_config, params)
@@ -78,7 +83,12 @@ async def test_execute_request_post_json_body():
     )
     params = {"username": "alice", "age": 25}
     
-    with patch("httpx.AsyncClient.request", new_callable=AsyncMock) as mock_request:
+    with patch(
+        "app.services.ai.tools.generic_api.create_ssrf_safe_async_client"
+    ) as client_factory:
+        mock_client = AsyncMock()
+        client_factory.return_value.__aenter__.return_value = mock_client
+        mock_request = mock_client.request
         mock_request.return_value = httpx.Response(201, json={"status": "created"})
         
         await GenericApiToolFactory._execute_request(config, params)
@@ -93,7 +103,12 @@ async def test_execute_request_error_handling(mock_tool_config):
     """测试执行过程中的异常处理"""
     params = {"user_id": 999}
     
-    with patch("httpx.AsyncClient.get", side_effect=httpx.ConnectError("Connection failed")):
+    with patch(
+        "app.services.ai.tools.generic_api.create_ssrf_safe_async_client"
+    ) as client_factory:
+        mock_client = AsyncMock()
+        client_factory.return_value.__aenter__.return_value = mock_client
+        mock_client.get.side_effect = httpx.ConnectError("Connection failed")
         result = await GenericApiToolFactory._execute_request(mock_tool_config, params)
         assert "[Execution Error]" in result
         assert "Connection failed" in result
@@ -101,7 +116,12 @@ async def test_execute_request_error_handling(mock_tool_config):
 
 @pytest.mark.asyncio
 async def test_execute_request_http_error_is_not_returned_as_success(mock_tool_config):
-    with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get:
+    with patch(
+        "app.services.ai.tools.generic_api.create_ssrf_safe_async_client"
+    ) as client_factory:
+        mock_client = AsyncMock()
+        client_factory.return_value.__aenter__.return_value = mock_client
+        mock_get = mock_client.get
         mock_get.return_value = httpx.Response(
             503,
             json={"message": "service unavailable"},
@@ -118,7 +138,12 @@ async def test_execute_request_http_error_is_not_returned_as_success(mock_tool_c
 
 @pytest.mark.asyncio
 async def test_execute_request_empty_success_returns_explicit_envelope(mock_tool_config):
-    with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get:
+    with patch(
+        "app.services.ai.tools.generic_api.create_ssrf_safe_async_client"
+    ) as client_factory:
+        mock_client = AsyncMock()
+        client_factory.return_value.__aenter__.return_value = mock_client
+        mock_get = mock_client.get
         mock_get.return_value = httpx.Response(204, content=b"")
 
         result = await GenericApiToolFactory._execute_request(
@@ -161,3 +186,40 @@ def test_generic_api_schema_can_declare_precise_evidence_type():
 
     assert tool.evidence_types == frozenset({EvidenceType.INTERNAL_DATA})
     assert tool.evidence_policy == "allow_empty_success"
+
+
+@pytest.mark.asyncio
+async def test_url_template_cannot_substitute_hostname():
+    config = SysApiTool(
+        name="unsafe_host",
+        method="GET",
+        url_template="https://{host}/status",
+        parameter_schema={"properties": {"host": {"type": "string"}}},
+    )
+
+    result = await GenericApiToolFactory._execute_request(
+        config,
+        {"host": "127.0.0.1"},
+    )
+
+    assert result == "[Execution Error] URL 模板不允许动态修改协议、主机或端口"
+
+
+@pytest.mark.asyncio
+async def test_path_substitution_is_percent_encoded(mock_tool_config):
+    with patch(
+        "app.services.ai.tools.generic_api.create_ssrf_safe_async_client"
+    ) as client_factory:
+        mock_client = AsyncMock()
+        client_factory.return_value.__aenter__.return_value = mock_client
+        mock_client.get.return_value = httpx.Response(200, json={"ok": True})
+
+        await GenericApiToolFactory._execute_request(
+            mock_tool_config,
+            {"user_id": "../admin?target=http://127.0.0.1"},
+        )
+
+    requested_url = mock_client.get.await_args.args[0]
+    assert requested_url.startswith("http://api.example.com/users/")
+    assert "../" not in requested_url
+    assert "%2F" in requested_url

@@ -5,11 +5,19 @@ import ipaddress
 import socket
 from dataclasses import dataclass
 from typing import Iterable, Optional
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import urljoin, urlsplit, urlunsplit
 
 import httpx
 
 OUTBOUND_DNS_TIMEOUT_SECONDS = 5.0
+OUTBOUND_MAX_REDIRECTS = 3
+_REDIRECT_STATUS_CODES = {301, 302, 303, 307, 308}
+_CROSS_ORIGIN_REDIRECT_HEADER_ALLOWLIST = {
+    "accept",
+    "accept-language",
+    "range",
+    "user-agent",
+}
 
 
 class OutboundUrlPolicyError(ValueError):
@@ -167,6 +175,18 @@ def _outbound_authority(url: str) -> tuple[str, str, int]:
     )
 
 
+def redact_outbound_url_for_log(url: str) -> str:
+    """Keep only the target Origin; paths and queries may contain credentials."""
+    try:
+        parsed = urlsplit(str(url or "").strip())
+        hostname = parsed.hostname or "invalid-host"
+        host = f"[{hostname}]" if ":" in hostname else hostname
+        netloc = host if parsed.port is None else f"{host}:{parsed.port}"
+        return urlunsplit((parsed.scheme, netloc, "", "", ""))
+    except ValueError:
+        return "invalid-url"
+
+
 def pin_outbound_request(
     request: httpx.Request,
     target: ResolvedOutboundTarget,
@@ -291,3 +311,43 @@ def create_ssrf_safe_async_client(
     kwargs["trust_env"] = False
     kwargs["transport"] = ResolvedIPTransport(allowed_url=allowed_url)
     return httpx.AsyncClient(**kwargs)
+
+
+async def get_with_ssrf_safe_redirects(
+    client: httpx.AsyncClient,
+    url: str,
+    *,
+    headers: Optional[dict[str, str]] = None,
+    max_redirects: int = OUTBOUND_MAX_REDIRECTS,
+) -> httpx.Response:
+    """Follow GET redirects explicitly, validating and pinning every hop."""
+    if max_redirects < 0:
+        raise ValueError("最大重定向次数不能为负数")
+
+    current_url = validate_outbound_http_url(url)
+    current_headers = dict(headers or {})
+    for redirect_count in range(max_redirects + 1):
+        response = await client.get(current_url, headers=current_headers)
+        if response.status_code not in _REDIRECT_STATUS_CODES:
+            return response
+
+        location = response.headers.get("location")
+        if not location:
+            return response
+        if redirect_count >= max_redirects:
+            await response.aclose()
+            raise OutboundUrlPolicyError("目标 URL 重定向次数过多")
+
+        try:
+            next_url = validate_outbound_http_url(urljoin(current_url, location))
+        finally:
+            await response.aclose()
+        if _outbound_authority(next_url) != _outbound_authority(current_url):
+            current_headers = {
+                name: value
+                for name, value in current_headers.items()
+                if name.lower() in _CROSS_ORIGIN_REDIRECT_HEADER_ALLOWLIST
+            }
+        current_url = next_url
+
+    raise OutboundUrlPolicyError("目标 URL 重定向次数过多")
