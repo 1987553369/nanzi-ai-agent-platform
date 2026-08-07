@@ -112,6 +112,7 @@ def test_python_quality_gate_includes_untracked_files_and_security_rules():
     assert '"--others", "--exclude-standard", "*.py"' in gate
     assert '"--diff-filter=ACMR"' in gate
     assert "HUNK_RE" in gate
+    assert "result.returncode == 1 and not result.stdout.strip()" in gate
     assert 'select = ["E4", "E7", "E9", "F", "S"]' in ruff_config
 
 
@@ -120,6 +121,7 @@ def test_runtime_and_development_dependencies_are_separated():
     development = (ROOT / "requirements-dev.txt").read_text(encoding="utf-8")
 
     for dependency in (
+        "defusedxml",
         "mypy",
         "Pillow",
         "pytest",

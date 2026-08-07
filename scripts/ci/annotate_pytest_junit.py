@@ -4,8 +4,9 @@
 from __future__ import annotations
 
 import argparse
-import xml.etree.ElementTree as ET
 from pathlib import Path
+
+from defusedxml import ElementTree as ET
 
 
 def _escape_property(value: str) -> str:

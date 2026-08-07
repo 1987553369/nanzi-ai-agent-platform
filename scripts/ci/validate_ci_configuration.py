@@ -65,6 +65,7 @@ def main() -> int:
 
     runtime_requirements = (ROOT / "requirements.txt").read_text(encoding="utf-8")
     for dev_dependency in (
+        "defusedxml",
         "pytest",
         "pytest-asyncio",
         "pytest-github-actions-annotate-failures",

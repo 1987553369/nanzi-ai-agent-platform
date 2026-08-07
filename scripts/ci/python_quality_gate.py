@@ -94,7 +94,9 @@ def run_ruff(paths: Iterable[str]) -> list[dict]:
         capture_output=True,
         text=True,
     )
-    if result.returncode not in {0, 1}:
+    if result.returncode not in {0, 1} or (
+        result.returncode == 1 and not result.stdout.strip()
+    ):
         print(result.stderr, file=sys.stderr)
         raise RuntimeError("Ruff 执行失败")
     return json.loads(result.stdout or "[]")
