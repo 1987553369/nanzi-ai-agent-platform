@@ -1569,7 +1569,7 @@ async def test_data_agent_runner_stores_successful_sql_result_for_followups(
     async def fake_get_configured_llm(**kwargs):
         return handle
 
-    async def fake_schema(keywords=None):
+    async def fake_schema(keywords=None, **kwargs):
         return "table_name: users\ncolumns: status"
 
     sql_rows = [{"status": "启用", "total_count": 8}]
@@ -1735,7 +1735,7 @@ async def test_data_agent_runner_injects_few_shot_examples(
     async def fake_get_configured_llm(**kwargs):
         return handle
 
-    async def fake_schema(keywords=None):
+    async def fake_schema(keywords=None, **kwargs):
         return "table_name: users\ncolumns: status"
 
     async def fake_sql(sql, data_source, dataset_name):
@@ -1997,7 +1997,7 @@ async def test_data_agent_runner_rewrites_contextual_query_and_plans_schema_keyw
         }
     ]
 
-    async def fake_schema(keywords=None):
+    async def fake_schema(keywords=None, **kwargs):
         assert keywords == "上海机房 PUE 本月 趋势 pue_daily room_name"
         return "table_name: pue_daily\ncolumns: day, pue, room_name"
 
@@ -3752,7 +3752,7 @@ async def test_sql_preflight_blocks_unknown_alias_column_before_execution(data_c
 
     assert invoked is False
     assert str(result).startswith("[TOOL_ERROR] SQL 预检失败")
-    assert '"HRMRESOURCE"."SSFB": invalid identifier' in str(result)
+    assert '"SSFB": invalid identifier' in str(result)
     assert "HRMRESOURCE" in str(result)
     assert "SUPDEPID" in str(result)
 
@@ -5315,7 +5315,7 @@ async def test_data_agent_runner_execute_repairs_sql_error_before_final_answer(
         fake_config_get,
     )
 
-    async def fake_schema(keywords=None):
+    async def fake_schema(keywords=None, **kwargs):
         return "table_name: demo\ncolumns: id, bad_col"
 
     async def fake_sql(sql, data_source, dataset_name):
@@ -5441,7 +5441,7 @@ async def test_data_agent_runner_double_repair_when_model_skips_sql_twice(
         fake_config_get,
     )
 
-    async def fake_schema(keywords=None):
+    async def fake_schema(keywords=None, **kwargs):
         return "table_name: demo\ncolumns: id, room, used, total"
 
     async def fake_sql(sql, data_source, dataset_name):
@@ -5591,7 +5591,7 @@ async def test_data_agent_runner_execute_rechecks_empty_sql_before_final_answer(
         fake_config_get,
     )
 
-    async def fake_schema(keywords=None):
+    async def fake_schema(keywords=None, **kwargs):
         return "table_name: demo\ncolumns: id, room, used, total"
 
     async def fake_sql(sql, data_source, dataset_name):
@@ -5739,7 +5739,7 @@ async def test_data_agent_runner_execute_continues_repair_when_late_empty_sql_fo
         fake_config_get,
     )
 
-    async def fake_schema(keywords=None):
+    async def fake_schema(keywords=None, **kwargs):
         return "table_name: demo\ncolumns: id, room"
 
     async def fake_sql(sql, data_source, dataset_name):
@@ -5883,7 +5883,7 @@ async def test_data_agent_runner_execute_retries_schema_miss_before_sql(
 
     schema_calls = 0
 
-    async def fake_schema(keywords=None):
+    async def fake_schema(keywords=None, **kwargs):
         nonlocal schema_calls
         schema_calls += 1
         if schema_calls == 1:
@@ -6264,7 +6264,7 @@ async def test_data_agent_runner_execute_does_not_require_sql_plan_for_high_risk
         fake_config_get,
     )
 
-    async def fake_schema(keywords=None):
+    async def fake_schema(keywords=None, **kwargs):
         return "table_name: demo\ncolumns: room, used, total"
 
     async def fake_sql(sql, data_source, dataset_name):

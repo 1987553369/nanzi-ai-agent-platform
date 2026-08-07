@@ -292,6 +292,10 @@ async def test_federated_graceful_degradation(test_config, monkeypatch):
         "app.services.ai.executors.federated_executor.execute_sql_query_core",
         mock_execute_sql_query_core
     )
+    monkeypatch.setattr(
+        "app.services.ai.executors.federated_executor.validate_federated_subquery_before_execute",
+        AsyncMock(return_value=None),
+    )
 
     # Mock LLM generating the XML execution plan
     # 两个子查询：
