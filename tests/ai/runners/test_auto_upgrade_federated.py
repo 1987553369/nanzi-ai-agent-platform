@@ -286,7 +286,7 @@ async def test_federated_graceful_degradation(test_config, monkeypatch):
             })
         else:
             # 模拟第二个子查询报错
-            raise ValueError("[TOOL_ERROR] ClickHouse connection timeout")
+            raise ValueError("synthetic secondary failure")
             
     monkeypatch.setattr(
         "app.services.ai.executors.federated_executor.execute_sql_query_core",
@@ -363,7 +363,10 @@ async def test_federated_graceful_degradation(test_config, monkeypatch):
     warning_logs = [e for e in events if e.get("status") == "warning"]
     assert len(warning_logs) > 0
     # 警告提示中应包含 "hr_ds" 相关信息
-    assert any("hr_ds" in str(w.get("details", "")) or "hr_ds" in str(w.get("content", "")) for w in warning_logs)
+    assert any(
+        "hr_ds" in str(w.get("details", "")) or "hr_ds" in str(w.get("content", ""))
+        for w in warning_logs
+    ), events
 
     # 验证最终总结文本被输出了
     assert any(e.get("content") == "Analysis summary content." for e in events), events

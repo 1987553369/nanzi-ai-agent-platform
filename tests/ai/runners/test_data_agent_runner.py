@@ -3,6 +3,7 @@ import pytest
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
+from agentscope.formatter import OpenAIChatFormatter
 from pydantic import BaseModel
 
 from app.schemas.agent import ChatConfig
@@ -1374,7 +1375,6 @@ async def test_data_agent_runner_execute_streams_agentscope_native_text(
     monkeypatch,
 ):
     from agentscope.credential import CredentialBase
-    from agentscope.formatter import OpenAIChatFormatter
     from agentscope.message import TextBlock, ToolCallBlock
     from agentscope.model import ChatModelBase, ChatResponse
 
@@ -1400,7 +1400,7 @@ async def test_data_agent_runner_execute_streams_agentscope_native_text(
                 "get_dataset_schema",
                 "execute_sql_query",
             ]
-            assert "get_current_time" in tool_names
+            assert "get_current_time" not in tool_names
             tool_results = [
                 block
                 for msg in messages
@@ -1494,7 +1494,6 @@ async def test_data_agent_runner_stores_successful_sql_result_for_followups(
     monkeypatch,
 ):
     from agentscope.credential import CredentialBase
-    from agentscope.formatter import OpenAIChatFormatter
     from agentscope.message import TextBlock, ToolCallBlock
     from agentscope.model import ChatModelBase, ChatResponse
 
@@ -1620,7 +1619,7 @@ async def test_data_agent_runner_stores_successful_sql_result_for_followups(
     async for chunk in runner.execute([{"role": "user", "content": "统计用户状态"}]):
         events.append(chunk)
 
-    assert any(chunk.get("content") == "查好了" for chunk in events)
+    assert any(chunk.get("content") == "查好了" for chunk in events), events
     mock_set_last.assert_awaited_once()
     user_id, conversation_id, payload = mock_set_last.await_args.args
     assert user_id == 42
@@ -1638,7 +1637,6 @@ async def test_data_agent_runner_injects_few_shot_examples(
     monkeypatch,
 ):
     from agentscope.credential import CredentialBase
-    from agentscope.formatter import OpenAIChatFormatter
     from agentscope.message import TextBlock, ToolCallBlock
     from agentscope.model import ChatModelBase, ChatResponse
 
@@ -1792,7 +1790,7 @@ async def test_data_agent_runner_injects_few_shot_examples(
     assert mock_search.await_args.kwargs["top_k"] is None
     assert any("命中经验库案例" in str(chunk.get("title", "")) for chunk in events)
     mock_record.assert_awaited_once()
-    assert any(chunk.get("content") == "参考案例查好了" for chunk in events)
+    assert any(chunk.get("content") == "参考案例查好了" for chunk in events), events
 
 
 @pytest.mark.asyncio
@@ -1862,7 +1860,6 @@ async def test_data_agent_runner_rewrites_contextual_query_and_plans_schema_keyw
     monkeypatch,
 ):
     from agentscope.credential import CredentialBase
-    from agentscope.formatter import OpenAIChatFormatter
     from agentscope.message import TextBlock, ToolCallBlock
     from agentscope.model import ChatModelBase, ChatResponse
 
@@ -2068,7 +2065,7 @@ async def test_data_agent_runner_rewrites_contextual_query_and_plans_schema_keyw
     assert mock_search.await_args.args[0] == "查询上海机房本月 PUE 趋势"
     assert any(chunk.get("title") == "用户需求分析" for chunk in events)
     assert any("pue_daily" in chunk.get("details", "") for chunk in events if chunk.get("title") == "用户需求分析")
-    assert any(chunk.get("content") == "本月 PUE 查好了" for chunk in events)
+    assert any(chunk.get("content") == "本月 PUE 查好了" for chunk in events), events
 
 
 @pytest.mark.asyncio
@@ -2077,7 +2074,6 @@ async def test_data_agent_runner_context_action_can_answer_without_sql(
     monkeypatch,
 ):
     from agentscope.credential import CredentialBase
-    from agentscope.formatter import OpenAIChatFormatter
     from agentscope.message import TextBlock
     from agentscope.model import ChatModelBase, ChatResponse
 
@@ -3470,7 +3466,6 @@ async def test_data_agent_runner_synthesizes_after_repeated_sql_gate(
     monkeypatch,
 ):
     from agentscope.credential import CredentialBase
-    from agentscope.formatter import OpenAIChatFormatter
     from agentscope.message import ToolCallBlock
     from agentscope.model import ChatModelBase, ChatResponse
 
@@ -3822,6 +3817,7 @@ async def test_sql_preflight_blocks_table_not_returned_by_schema_before_executio
 async def test_sql_preflight_allows_table_in_user_permission_set(data_config, monkeypatch):
     from app.services.ai.runners.data_agent_runner import DataAgentRunner, _DataRunState
     from app.services.ai.runtime.agentscope.tools import RuntimeToolSpec
+    from app.services.ai.chatbi_sql_query_binding import TableBinding
 
     invoked = False
 
@@ -3836,6 +3832,17 @@ async def test_sql_preflight_allows_table_in_user_permission_set(data_config, mo
     monkeypatch.setattr(
         "app.services.sql_query_execution_service.check_physical_table_refs_permission",
         fake_permission_check,
+    )
+    monkeypatch.setattr(
+        "app.services.ai.chatbi_sql_query_binding.resolve_table_bindings_from_db",
+        AsyncMock(
+            return_value={
+                "hrmresource": TableBinding(
+                    physical_name="hrmresource",
+                    dataset_name="hr",
+                )
+            }
+        ),
     )
 
     runner = DataAgentRunner(config=data_config, trace_id="trace-sql-preflight-perm-allow", trace_buffer=[])
@@ -3942,7 +3949,7 @@ async def test_sql_preflight_allows_cte_names_when_physical_tables_are_in_schema
 
 
 @pytest.mark.asyncio
-async def test_sql_preflight_allows_unqualified_columns_for_single_table_to_avoid_dialect_false_positives(data_config):
+async def test_sql_preflight_blocks_unknown_unqualified_columns_for_single_table(data_config):
     from app.services.ai.runners.data_agent_runner import DataAgentRunner, _DataRunState
     from app.services.ai.runtime.agentscope.tools import RuntimeToolSpec
 
@@ -3973,8 +3980,8 @@ async def test_sql_preflight_allows_unqualified_columns_for_single_table_to_avoi
         "sql": "SELECT SUPDEPID, SSFB FROM HRMRESOURCE WHERE BELONGTO = 1",
     })
 
-    assert invoked is True
-    assert str(result).startswith('{"columns"')
+    assert invoked is False
+    assert '"HRMRESOURCE"."SSFB": invalid identifier' in str(result)
 
 
 @pytest.mark.asyncio
@@ -4624,7 +4631,8 @@ async def test_data_agent_runner_marks_no_authorized_schema_and_blocks_sql_befor
     assert runner._last_run_state.no_authorized_schema is True
     assert runner._last_run_state.schema_completed is False
     assert runner._is_schema_fatal(runner._last_run_state) is True
-    assert runner._last_run_state.sql_before_schema is True
+    assert runner._last_run_state.sql_before_schema is False
+    assert "call_sql" not in runner._last_run_state.tool_names
     assert runner._last_run_state.sql_error is False
 
 
@@ -5213,6 +5221,8 @@ async def test_data_agent_runner_execute_repairs_sql_error_before_final_answer(
         class Parameters(BaseModel):
             pass
 
+        formatter = OpenAIChatFormatter()
+
         def __init__(self, **kwargs):
             super().__init__(**kwargs)
             self.calls = 0
@@ -5352,6 +5362,8 @@ async def test_data_agent_runner_double_repair_when_model_skips_sql_twice(
         class Parameters(BaseModel):
             pass
 
+        formatter = OpenAIChatFormatter()
+
         def __init__(self, **kwargs):
             super().__init__(**kwargs)
             self.calls = 0
@@ -5484,6 +5496,8 @@ async def test_data_agent_runner_execute_rechecks_empty_sql_before_final_answer(
     class FakeModel(ChatModelBase):
         class Parameters(BaseModel):
             pass
+
+        formatter = OpenAIChatFormatter()
 
         def __init__(self, **kwargs):
             super().__init__(**kwargs)
@@ -5623,6 +5637,8 @@ async def test_data_agent_runner_execute_continues_repair_when_late_empty_sql_fo
     class FakeModel(ChatModelBase):
         class Parameters(BaseModel):
             pass
+
+        formatter = OpenAIChatFormatter()
 
         def __init__(self, **kwargs):
             super().__init__(**kwargs)
@@ -5770,6 +5786,8 @@ async def test_data_agent_runner_execute_retries_schema_miss_before_sql(
     class FakeModel(ChatModelBase):
         class Parameters(BaseModel):
             pass
+
+        formatter = OpenAIChatFormatter()
 
         def __init__(self, **kwargs):
             super().__init__(**kwargs)
@@ -6162,6 +6180,8 @@ async def test_data_agent_runner_execute_does_not_require_sql_plan_for_high_risk
     class FakeModel(ChatModelBase):
         class Parameters(BaseModel):
             pass
+
+        formatter = OpenAIChatFormatter()
 
         def __init__(self, **kwargs):
             super().__init__(**kwargs)
