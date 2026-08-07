@@ -11,6 +11,7 @@ sys.path.append(os.getcwd())
 from app.core.orm import AsyncSessionLocal
 from app.models.mcp import McpServer, McpToolCache
 from app.services.ai.tools.mcp_client import McpClientService
+from app.utils.mcp_credentials import encrypt_mcp_auth_headers
 from sqlalchemy import select, delete
 
 # Setup logging
@@ -38,7 +39,10 @@ async def test_full_sync_flow():
             server_name="Test_ModelScope_Server",
             # server_type="sse",  <-- Removed invalid field
             sse_url=test_url,
-            auth_headers=f'{{"Authorization": "Bearer {test_token}"}}',
+            auth_headers=encrypt_mcp_auth_headers(
+                f'{{"Authorization": "Bearer {test_token}"}}'
+            ),
+            auth_headers_status="encrypted",
             enabled_status=1,
             created_at=datetime.now(),
             updated_at=datetime.now()

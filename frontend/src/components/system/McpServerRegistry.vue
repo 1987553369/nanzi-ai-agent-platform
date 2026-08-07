@@ -111,6 +111,10 @@ const verifying = ref(false)
 const discoveredTools = ref<any[]>([])
 const syncLoading = ref<Record<string, boolean>>({})
 const statusLoading = ref<Record<string, boolean>>({})
+const credentialNeedsAttention = (server: any) =>
+  ['migration_pending', 'rotation_required'].includes(String(server?.credential_status || ''))
+const credentialStatusLabel = (server: any) =>
+  server?.credential_status === 'migration_pending' ? '凭据待加密' : '凭据待重录'
 
 type McpAgentUsage = {
   id: string
@@ -221,6 +225,7 @@ const newServer = ref({
 })
 const existingAuthHeadersConfigured = ref(false)
 const authHeadersDirty = ref(false)
+const editingCredentialStatus = ref('empty')
 
 const markAuthHeadersDirty = () => {
   authHeadersDirty.value = true
@@ -290,6 +295,7 @@ const resetWizard = () => {
   headerMode.value = 'simple'
   existingAuthHeadersConfigured.value = false
   authHeadersDirty.value = false
+  editingCredentialStatus.value = 'empty'
 }
 
 const openEditModal = (server: any) => {
@@ -303,6 +309,7 @@ const openEditModal = (server: any) => {
   )
   existingAuthHeadersConfigured.value = Boolean(server.has_auth_headers)
   authHeadersDirty.value = false
+  editingCredentialStatus.value = String(server.credential_status || 'empty')
   headerPairs.value = [{ key: '', value: '' }]
   newServer.value = {
     server_name: server.server_name,
@@ -317,7 +324,11 @@ const openEditModal = (server: any) => {
 }
 
 const toggleServerStatus = async (server: any, enabled: boolean) => {
-  if (!canSave.value || statusLoading.value[server.id]) return false
+  if (
+    !canSave.value
+    || statusLoading.value[server.id]
+    || (enabled && credentialNeedsAttention(server))
+  ) return false
 
   const nextStatus = enabled ? 1 : 0
   if (Number(server.enabled_status) === nextStatus) return true
@@ -748,13 +759,17 @@ onMounted(fetchServers)
               <div class="flex shrink-0 items-center gap-2" @click.stop>
                 <span
                   class="text-[10px] font-semibold"
-                  :class="server.enabled_status === 1 ? 'text-emerald-600' : 'text-gray-400'"
+                  :class="credentialNeedsAttention(server)
+                    ? 'text-red-600'
+                    : (server.enabled_status === 1 ? 'text-emerald-600' : 'text-gray-400')"
                 >
-                  {{ server.enabled_status === 1 ? '运行中' : '已禁用' }}
+                  {{ credentialNeedsAttention(server)
+                    ? credentialStatusLabel(server)
+                    : (server.enabled_status === 1 ? '运行中' : '已禁用') }}
                 </span>
                 <Switch
                   :model-value="server.enabled_status === 1"
-                  :disabled="!canSave || statusLoading[server.id]"
+                  :disabled="!canSave || statusLoading[server.id] || credentialNeedsAttention(server)"
                   :loading="statusLoading[server.id]"
                   :aria-label="`${server.server_name}${server.enabled_status === 1 ? '禁用' : '启用'}`"
                   @update:model-value="handleServerStatusChange(server, $event)"
@@ -778,7 +793,7 @@ onMounted(fetchServers)
                   <button type="button" @click="openEditModal(server)" class="rounded p-1.5 text-gray-400 transition-colors hover:bg-white hover:text-blue-500" title="编辑配置">
                     <PencilSquareIcon class="h-4 w-4" />
                   </button>
-                  <button type="button" @click="syncTools(server.id)" :disabled="syncLoading[server.id]" class="rounded p-1.5 text-gray-400 transition-colors hover:bg-white hover:text-primary">
+                  <button type="button" @click="syncTools(server.id)" :disabled="syncLoading[server.id] || credentialNeedsAttention(server)" class="rounded p-1.5 text-gray-400 transition-colors hover:bg-white hover:text-primary disabled:cursor-not-allowed disabled:opacity-40">
                     <CloudArrowDownIcon class="h-4 w-4" :class="syncLoading[server.id] ? 'animate-bounce' : ''" />
                   </button>
                   <button type="button" @click="confirmDeleteServer(server)" class="rounded p-1.5 text-gray-400 transition-colors hover:bg-white hover:text-red-500">
@@ -1018,7 +1033,13 @@ onMounted(fetchServers)
                   切换到{{ headerMode === 'simple' ? '高级 JSON' : '可视化列表' }}
                 </button>
               </div>
-              <p v-if="isEditing && existingAuthHeadersConfigured" class="text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded px-2 py-1.5 mb-3">
+              <p
+                v-if="isEditing && ['migration_pending', 'rotation_required'].includes(editingCredentialStatus)"
+                class="mb-3 rounded border border-red-200 bg-red-50 px-2 py-1.5 text-xs text-red-700"
+              >
+                历史认证信息已隔离，必须重新填写认证 Header 后才能启用或同步该服务。
+              </p>
+              <p v-else-if="isEditing && existingAuthHeadersConfigured" class="text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded px-2 py-1.5 mb-3">
                 已配置认证信息。留空将保留原凭据；填写新值会覆盖，服务端不会回显旧值。
               </p>
 

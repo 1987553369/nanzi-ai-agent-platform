@@ -14,7 +14,7 @@
 | [x] | WEB-P0-02 | 修复 Markdown XSS | `markdown.ts`、`MessageRenderer.vue` | 原始 HTML 默认禁用；恶意模型流无法执行脚本/事件属性 |
 | [x] | WEB-P0-03 | 修复 Embed `postMessage` 信任和凭据传递 | `EmbedChat.vue`、`Chat.vue`、Widget Debugger、集成文档 | 校验 Origin/Source/nonce；禁止 `*`；Portal 不再传长期 API Key |
 | [x] | AUTH-P0-01 | 删除固定管理员 API Key 和公共默认长期 Secret | 初始化 SQL、安装脚本、示例配置 | 安装随机生成一次性凭据；Secret Scan 无有效固定凭据 |
-| [~] | MCP-P0-01 | 阻止 MCP 凭据回显和日志泄露 | MCP DTO、Model、Client、前端表单 | 列表/详情仅返回是否配置凭据；日志无 Header 值；新写入存储加密；旧明文待迁移 |
+| [x] | MCP-P0-01 | 阻止 MCP 凭据回显和日志泄露 | MCP DTO、Model、Client、前端表单 | 列表/详情仅返回配置状态；日志无 Header 值；新写入和存量凭据均使用版本化密文；明文运行时回退已禁用 |
 | [~] | NET-P0-01 | 建立统一 SSRF 防护并接入 MCP | URL Policy、MCP Client/Endpoint | 阻断私网、Loopback、Link-local、云元数据、IPv6、重定向；DNS 复查已接入，最终需固定解析/出口代理 |
 
 ## 二、P1 工程与安全稳定（P0 后 2-6 周）
@@ -52,7 +52,6 @@
 |---|---|---|
 | AUTH-P0-02 | 第三方跨域 Embed 仍需要短期、限受众 Embed Token 签发/撤销服务 | 新增 Token 表/签发接口、Origin/Agent 绑定、TTL、撤销和审计后再开放生产跨域嵌入 |
 | SEC-P0-02 | 代码执行当前只做了权限止血，执行进程仍在平台边界内 | 独立 Worker/Queue，非 root、只读根、无 Secret、网络/CPU/内存/PID/超时策略 |
-| MCP-P0-02 | 存量 MCP 明文 Header 需要在当前 `ENCRYPTION_KEY` 下轮换 | 备份后批量解密重加密，失败行进入人工轮换队列，完成后禁止 legacy fallback |
 | NET-P0-02 | 应用层 DNS 复查无法单独证明抗 DNS Rebinding | egress proxy/NetworkPolicy 固定出口，或实现带 SNI 的 IP pinning transport，并做重绑定演练 |
 
 ## 四、产品与平台完善（2-9 个月）
@@ -98,3 +97,5 @@
 | 2026-08-06 | P1-E 验证 | AI 执行能力纯逻辑与迁移契约 16 项通过；`tests/frontend` 全量 320 项通过；`npm run build` 完整通过（10,386 个模块）。聊天 API/任务端点负向测试已补齐，本机因 Python 3.9 且缺少 `aiomysql` 未执行，需由标准 Python 3.11 CI 回归 |
 | 2026-08-06 | DB-A | MySQL/PostgreSQL 统一引入 `nanzi_schema_migrations` 账本、SHA-256 Checksum 和数据库 advisory lock；MySQL DDL 执行前持久化 `in_progress`，PostgreSQL 单版本 SQL 与成功记录同事务；原生 MySQL 入口改为委托安全执行器；重复版本 V31/V110 已消除 |
 | 2026-08-06 | DB-A 验证 | Python 3.11 下 Fresh、重跑、N-1 Upgrade、旧库指定版本基线、Checksum 篡改、脏状态、历史文件缺失、并发锁和 Shell 透传等迁移契约测试 67 项通过；Python 编译、Bash 语法和 `git diff --check` 通过；未连接或修改任何实际数据库 |
+| 2026-08-07 | MCP-A | 新增 MySQL V117/PostgreSQL V16 凭据隔离状态；旧明文服务自动禁用；离线命令支持 dry-run、批量加密、逐行锁和失败隔离；运行时删除明文回退并每次校验持久化状态；API/前端提供不回显值的轮换状态，配置变化销毁旧会话 |
+| 2026-08-07 | MCP-A 验证 | Python 3.11 凭据状态机/安全契约 29 项及迁移清单契约 25 项通过；MCP 前端专项 31 项及 `tests/frontend` 全量 320 项通过；`npm run build` 完整通过（10,386 个模块）；Python 编译和 `git diff --check` 通过；未执行任何实际数据库迁移 |

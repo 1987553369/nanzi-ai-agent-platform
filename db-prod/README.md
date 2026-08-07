@@ -113,6 +113,12 @@ pip install -r requirements.txt
 
 ## 六、常见问题
 
+### MCP 历史明文凭据如何迁移
+
+V117 会先隔离并禁用旧明文 MCP 服务，随后必须在维护窗口使用当前
+`ENCRYPTION_KEY` 运行应用层迁移命令。完整步骤、返回码和人工轮换队列处理方式见
+[MCP 历史凭据加密迁移手册](../docs/MCP_CREDENTIAL_MIGRATION_CN.md)。
+
 ### 缺少 `aiomysql`
 
 请在项目要求的 Python 3.11 虚拟环境安装依赖后重试。`apply-sql-native.sh` 同样会委托

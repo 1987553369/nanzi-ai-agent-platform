@@ -28,12 +28,14 @@ MCP：登记 SSE URL/认证 -> 验证/同步工具 -> 绑定资源 -> JSON-RPC �
 | 记忆和向量索引 | Redis | RediSearch 要求 DB 0，TTL 和故障切换会影响连续性 |
 | Skill 文件 | 本地挂载目录 | 多副本不一致，应迁移对象存储 |
 | Skill 发布记录 | `skill_publications`、`skill_publication_versions` | 版本应引用不可变 Artifact Digest |
-| MCP 定义和缓存 | `sys_mcp_servers`、`sys_mcp_tool_cache` | 凭据需加密轮换，缓存需失效策略 |
+| MCP 定义和缓存 | `sys_mcp_servers`、`sys_mcp_tool_cache` | Header 使用版本化密文；存量迁移失败项隔离禁用，缓存随配置变化失效 |
 
 ## 关键安全边界
 
 - MCP Verify 和 Personal MCP 接受任意 URL，存在 SSRF 和内部网络探测风险。
-- MCP 响应会返回 `auth_headers`，凭据明文保存，日志还会输出 Authorization 前缀。
+- 历史审计曾发现 MCP 响应回显 `auth_headers`、数据库明文保存和日志输出
+  Authorization 前缀；`MCP-A` 已改为请求/响应 DTO 分离、版本化密文、无值状态响应、
+  旧明文隔离迁移和日志仅输出 Header 名称。后续仍需验证密钥轮换和 KMS 托管。
 - Skill 压缩包可能包含路径穿越、符号链接、超大解压和可执行内容。
 - 检索文档属于不可信 Prompt 和 UI 输入，可能包含 Prompt Injection、数据外传指令和 XSS。
 - 记忆是敏感衍生个人数据，应提供查看、修改、删除、保留期限和用途控制。

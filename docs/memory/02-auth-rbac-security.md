@@ -35,7 +35,9 @@
 
 ## P1 高风险问题
 
-- MCP 列表响应会返回 `auth_headers`，凭据以明文保存，并在日志输出 Authorization 前缀。
+- MCP 凭据回显、明文保存和日志前缀泄露属于历史发现，已在 `MCP-A` 修复：响应只返回
+  `has_auth_headers`/`credential_status`，新写入使用 `mcpheaders:v1:` 密文，存量明文先禁用
+  隔离再由离线命令迁移，运行时拒绝明文回退。剩余工作是接入 KMS 和演练密钥轮换。
 - MCP、模型地址、通用 API、Webhook 等可配置 URL 缺少统一 SSRF 防护。
 - SSO 客户端存在 `verify=False`，无法验证服务端证书。
 - Cookie 固定 `secure=False`，长期 API Key 返回浏览器并保存在 `localStorage`。

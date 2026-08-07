@@ -19,6 +19,7 @@ def test_mcp_response_does_not_inherit_write_credentials():
     response_block = endpoint.split("class McpServerResponse", 1)[1].split("class McpToolResponse", 1)[0]
     assert "\n    auth_headers:" not in response_block
     assert "has_auth_headers" in response_block
+    assert "credential_status" in response_block
 
 
 def test_mcp_client_redacts_credentials_and_disables_redirects():
@@ -41,3 +42,24 @@ def test_mcp_frontend_preserves_secret_without_server_echo():
     assert "authHeadersDirty" in registry
     assert "existingAuthHeadersConfigured.value && !authHeadersDirty.value" in registry
     assert 'type="password"' in registry
+    assert "credentialNeedsAttention" in registry
+    assert "历史认证信息已隔离" in registry
+
+
+def test_mcp_runtime_has_no_plaintext_credential_fallback():
+    credentials = _source("app/utils/mcp_credentials.py")
+    client = _source("app/services/ai/tools/mcp_client.py")
+    endpoint = _source("app/api/portal/endpoints/mcp.py")
+
+    assert "return parse_mcp_auth_headers(normalized)" not in credentials
+    assert "未加密的 MCP 认证凭据" in credentials
+    assert "ensure_mcp_runtime_credential_access" in client
+    assert "invalidate_session" in client
+    assert "headers = decrypt_mcp_auth_headers(server.auth_headers)" in client
+    assert "parse_mcp_auth_headers(data.auth_headers)" in endpoint
+    assert "decrypt_mcp_auth_headers(data.auth_headers)" not in endpoint
+    assert '"/credential-rotation"' in endpoint
+    assert 'server_data["enabled_status"]' in endpoint
+    assert 'server_data.get("enabled_status") or 1' not in endpoint
+    assert '_ensure_server_runtime_ready(server, "同步工具")' in endpoint
+    assert '_ensure_server_runtime_ready(server, "执行工具")' in endpoint

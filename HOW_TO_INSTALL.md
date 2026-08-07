@@ -144,6 +144,11 @@ NanZi 开源智能体平台是企业级的多智能体编排与数据智能洞�
     ```
     `failed` / `in_progress` 状态不会自动重试，必须人工核对实际 Schema 后处置。
 
+6.  **升级旧环境的 MCP 凭据**：
+    V117 会禁用仍保存明文 Header 的 MCP 服务。结构迁移后、启动新应用前，必须按
+    [MCP 历史凭据加密迁移手册](docs/MCP_CREDENTIAL_MIGRATION_CN.md)执行 dry-run、加密迁移和
+    人工轮换队列验收。
+
 详细的库表结构说明，请参考：[db-prod/README.md](db-prod/README.md)。
 
 ---
@@ -235,6 +240,8 @@ NanZi 开源智能体平台是企业级的多智能体编排与数据智能洞�
     *   已有业务表但没有迁移账本时，先备份并核对真实完成版本，再执行：
         `./db-prod-pg/apply-sql.sh --baseline-through <当前版本>`
     *   历史迁移 Checksum 不一致或状态为 `failed` / `in_progress` 时，禁止自动重试，必须人工核对。
+    *   V16 会禁用仍保存明文 Header 的 MCP 服务。结构迁移后、启动新应用前，必须按
+        [MCP 历史凭据加密迁移手册](docs/MCP_CREDENTIAL_MIGRATION_CN.md)完成加密迁移和轮换队列验收。
 
 4.  **管理员初始化与凭证维护（若第 2 步已选 Y 可跳过）**：
     PostgreSQL 基线不写入固定管理员 API Key。初始化时选择 `Y` 会使用当前

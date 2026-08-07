@@ -168,8 +168,8 @@ def test_repository_manifests_have_unique_versions():
 
     assert any(migration.version == "3.1" for migration in mysql)
     assert any(migration.version == "111.1" for migration in mysql)
-    assert mysql[-1].version == "116"
-    assert postgres[-1].version == "15"
+    assert mysql[-1].version == "117"
+    assert postgres[-1].version == "16"
 
 
 class _AsyncLockCursor:

@@ -6,6 +6,7 @@ import uuid
 import json
 import time
 import logging
+from datetime import datetime
 
 from app.core.orm import get_db_session
 from app.core.dependencies import require_admin, require_permission, require_api_key
@@ -14,10 +15,17 @@ from app.models.agent import AIAgent, AIAgentVersion
 from app.services.ai.tools.mcp_client import McpClientService, McpSseSession
 from app.services.ai.tools.mcp_factory import McpToolFactory
 from app.utils.mcp_credentials import (
+    MCP_CREDENTIAL_STATUS_EMPTY,
+    MCP_CREDENTIAL_STATUS_ENCRYPTED,
+    MCP_CREDENTIAL_STATUS_MIGRATION_PENDING,
+    MCP_CREDENTIAL_STATUS_ROTATION_REQUIRED,
     McpCredentialError,
     decrypt_mcp_auth_headers,
+    ensure_mcp_runtime_credential_access,
     encrypt_mcp_auth_headers,
     has_mcp_auth_headers,
+    parse_mcp_auth_headers,
+    resolve_mcp_credential_status,
 )
 from app.utils.outbound_url_policy import (
     OutboundUrlPolicyError,
@@ -64,6 +72,7 @@ class McpServerResponse(BaseModel):
     remark: Optional[str] = None
     user_id: Optional[int] = None
     has_auth_headers: bool = False
+    credential_status: str = MCP_CREDENTIAL_STATUS_EMPTY
     last_sync_at: Optional[Any] = None
     tool_count: int = 0
     published_tool_count: int = 0
@@ -105,8 +114,52 @@ class McpServerUsageResponse(BaseModel):
     agents: List[McpAgentUsageItem]
 
 
+class McpCredentialRotationItem(BaseModel):
+    id: str
+    server_name: str
+    scope: str
+    user_id: Optional[int] = None
+    credential_status: str
+    migration_error: Optional[str] = None
+    enabled_status: int
+
+
 def _normalized_server_name(value: str) -> str:
     return str(value or "").strip()
+
+
+def _server_credential_status(server: McpServer) -> str:
+    return resolve_mcp_credential_status(
+        server.auth_headers,
+        getattr(server, "auth_headers_status", None),
+    )
+
+
+def _ensure_server_runtime_ready(server: McpServer, action: str) -> None:
+    try:
+        ensure_mcp_runtime_credential_access(
+            enabled_status=server.enabled_status,
+            stored_value=server.auth_headers,
+            recorded_status=getattr(server, "auth_headers_status", None),
+        )
+    except McpCredentialError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=f"MCP 服务当前不能{action}：{exc}",
+        ) from exc
+
+
+def _set_server_credentials(server: McpServer, raw_value: Optional[str]) -> None:
+    encrypted = encrypt_mcp_auth_headers(raw_value)
+    server.auth_headers = encrypted
+    server.auth_headers_status = (
+        MCP_CREDENTIAL_STATUS_ENCRYPTED
+        if encrypted
+        else MCP_CREDENTIAL_STATUS_EMPTY
+    )
+    server.auth_headers_restore_enabled_status = None
+    server.auth_headers_migration_error = None
+    server.auth_headers_migrated_at = datetime.now()
 
 
 def _configured_tool_names(value: Any) -> set[str]:
@@ -221,7 +274,7 @@ async def verify_mcp_server(
     try:
         safe_url = await validate_outbound_url(data.sse_url)
         if data.auth_headers is not None:
-            auth_headers = decrypt_mcp_auth_headers(data.auth_headers)
+            auth_headers = parse_mcp_auth_headers(data.auth_headers)
         elif data.server_id:
             server = (
                 await db.execute(select(McpServer).where(McpServer.id == data.server_id))
@@ -229,13 +282,22 @@ async def verify_mcp_server(
             if not server:
                 raise HTTPException(status_code=404, detail="Server not found")
             _ensure_server_control_access(server, user)
+            if _server_credential_status(server) in {
+                MCP_CREDENTIAL_STATUS_MIGRATION_PENDING,
+                MCP_CREDENTIAL_STATUS_ROTATION_REQUIRED,
+            }:
+                raise McpCredentialError(
+                    "该 MCP 服务的历史凭据已隔离，请重新录入认证 Header"
+                )
             auth_headers = decrypt_mcp_auth_headers(server.auth_headers)
         else:
             auth_headers = {}
     except (McpCredentialError, OutboundUrlPolicyError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    McpClientService._sessions[temp_id] = McpSseSession(temp_id, safe_url, auth_headers)
+    McpClientService._sessions[temp_id] = McpSseSession(
+        temp_id, safe_url, auth_headers, managed=False
+    )
     
     try:
         tools = await McpClientService.list_remote_tools(temp_id)
@@ -263,6 +325,41 @@ def _get_user_id(user: Dict) -> Optional[int]:
         return int(val) if val is not None else None
     except Exception:
         return None
+
+
+@router.get(
+    "/credential-rotation",
+    response_model=List[McpCredentialRotationItem],
+)
+async def list_mcp_credential_rotation_queue(
+    db: AsyncSession = Depends(get_db_session),
+    user: Dict = Depends(require_admin),
+):
+    """Return quarantined MCP rows without exposing credential values."""
+    del user
+    result = await db.execute(select(McpServer).order_by(McpServer.created_at.asc()))
+    queue = []
+    for server in result.scalars().all():
+        credential_status = _server_credential_status(server)
+        if credential_status not in {
+            MCP_CREDENTIAL_STATUS_MIGRATION_PENDING,
+            MCP_CREDENTIAL_STATUS_ROTATION_REQUIRED,
+        }:
+            continue
+        queue.append(
+            {
+                "id": server.id,
+                "server_name": server.server_name,
+                "scope": server.scope or "global",
+                "user_id": server.user_id,
+                "credential_status": credential_status,
+                "migration_error": getattr(
+                    server, "auth_headers_migration_error", None
+                ),
+                "enabled_status": int(server.enabled_status or 0),
+            }
+        )
+    return queue
 
 @router.get("/servers", response_model=List[McpServerResponse])
 async def list_mcp_servers(
@@ -301,6 +398,7 @@ async def list_mcp_servers(
         
         item = McpServerResponse.model_validate(s)
         item.has_auth_headers = has_mcp_auth_headers(s.auth_headers)
+        item.credential_status = _server_credential_status(s)
         item.tool_count = total_count
         item.published_tool_count = pub_count
         item.stale_tool_count = stale_count
@@ -349,6 +447,15 @@ async def create_mcp_server(
     server_data["remark"] = _normalized_remark(data.remark)
     server_data["scope"] = target_scope
     server_data["user_id"] = user_id
+    server_data["enabled_status"] = int(
+        data.enabled_status if data.enabled_status is not None else 1
+    )
+    server_data["auth_headers_status"] = (
+        MCP_CREDENTIAL_STATUS_ENCRYPTED
+        if server_data["auth_headers"]
+        else MCP_CREDENTIAL_STATUS_EMPTY
+    )
+    server_data["auth_headers_migrated_at"] = datetime.now()
     
     new_server = McpServer(id=server_id, **server_data)
     db.add(new_server)
@@ -360,20 +467,22 @@ async def create_mcp_server(
         raise HTTPException(status_code=400, detail="服务保存冲突，请检查服务名称或地址是否重复")
     
     # Auto-sync tools immediately after creation
-    try:
-        await McpClientService.sync_tools(server_id)
-    except Exception as e:
-        logger.warning(f"Initial sync failed for new server {server_id}: {e}")
+    if server_data["enabled_status"] == 1:
+        try:
+            await McpClientService.sync_tools(server_id)
+        except Exception as e:
+            logger.warning(f"Initial sync failed for new server {server_id}: {e}")
         
     return {
         "id": server_id,
         "server_name": server_name,
         "sse_url": server_data["sse_url"],
-        "enabled_status": server_data.get("enabled_status") or 1,
+        "enabled_status": server_data["enabled_status"],
         "scope": target_scope,
         "remark": server_data.get("remark"),
         "user_id": user_id,
         "has_auth_headers": has_mcp_auth_headers(server_data.get("auth_headers")),
+        "credential_status": server_data["auth_headers_status"],
         "tool_count": 0,
         "published_tool_count": 0,
     }
@@ -422,14 +531,29 @@ async def update_mcp_server(
     try:
         server.sse_url = validate_outbound_http_url(data.sse_url)
         if data.auth_headers is not None:
-            server.auth_headers = encrypt_mcp_auth_headers(data.auth_headers)
+            _set_server_credentials(server, data.auth_headers)
     except (McpCredentialError, OutboundUrlPolicyError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    server.enabled_status = data.enabled_status
+    requested_enabled_status = int(data.enabled_status or 0)
+    if (
+        requested_enabled_status == 1
+        and data.auth_headers is None
+        and _server_credential_status(server)
+        in {
+            MCP_CREDENTIAL_STATUS_MIGRATION_PENDING,
+            MCP_CREDENTIAL_STATUS_ROTATION_REQUIRED,
+        }
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="历史 MCP 凭据已隔离，重新录入认证 Header 后才能启用服务",
+        )
+    server.enabled_status = requested_enabled_status
     # 启用/禁用等局部更新可能不传 remark，避免误清空
     if "remark" in data.model_fields_set:
         server.remark = _normalized_remark(data.remark)
     await db.commit()
+    await McpClientService.invalidate_session(server_id)
     _clear_runtime_tool_cache()
     
     # Only enabled servers should be synchronized. Syncing a disabled server
@@ -464,6 +588,7 @@ async def update_mcp_server(
         "remark": server.remark,
         "user_id": server.user_id,
         "has_auth_headers": has_mcp_auth_headers(server.auth_headers),
+        "credential_status": _server_credential_status(server),
         "tool_count": total,
         "published_tool_count": pub,
         "stale_tool_count": stale,
@@ -492,6 +617,7 @@ async def delete_mcp_server(
     await db.execute(delete(McpServer).where(McpServer.id == server_id))
     
     await db.commit()
+    await McpClientService.invalidate_session(server_id)
     _clear_runtime_tool_cache()
     return {"message": "Server and associated tools deleted"}
 
@@ -510,6 +636,7 @@ async def sync_mcp_tools(
         raise HTTPException(status_code=403, detail="只有系统管理员才能同步平台公共 MCP 服务")
     if server.scope == "personal" and server.user_id != _get_user_id(user) and not is_admin:
         raise HTTPException(status_code=403, detail="无法同步其他用户的私有 MCP 服务")
+    _ensure_server_runtime_ready(server, "同步工具")
 
     try:
         sync_result = await McpClientService.sync_tools(server_id) or {}
@@ -661,8 +788,7 @@ async def execute_mcp_tool(
     if not server:
         raise HTTPException(status_code=404, detail="Server not found")
     _ensure_server_control_access(server, user)
-    if server.enabled_status != 1:
-        raise HTTPException(status_code=409, detail="MCP 服务已禁用，无法执行工具")
+    _ensure_server_runtime_ready(server, "执行工具")
     if not tool.is_available:
         raise HTTPException(status_code=409, detail="工具已被远端 MCP 服务删除，无法执行")
     if not tool.is_published:
@@ -691,8 +817,7 @@ async def toggle_tool_publish(
     if not server:
         raise HTTPException(status_code=404, detail="Server not found")
     _ensure_server_control_access(server, user)
-    if server.enabled_status != 1:
-        raise HTTPException(status_code=409, detail="MCP 服务已禁用，无法修改工具发布状态")
+    _ensure_server_runtime_ready(server, "修改工具发布状态")
     if not tool.is_available:
         raise HTTPException(status_code=409, detail="远端已删除的工具不能发布或下线")
 

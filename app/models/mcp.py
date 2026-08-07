@@ -10,7 +10,11 @@ class McpServer(Base):
     server_name = Column(String(100), nullable=False)
     remark = Column(String(500), nullable=True)
     sse_url = Column(Text, nullable=False)
-    auth_headers = Column(Text, nullable=True)  # JSON string
+    auth_headers = Column(Text, nullable=True)
+    auth_headers_status = Column(String(32), nullable=False, default="empty")
+    auth_headers_restore_enabled_status = Column(Integer, nullable=True)
+    auth_headers_migration_error = Column(String(500), nullable=True)
+    auth_headers_migrated_at = Column(DateTime, nullable=True)
     enabled_status = Column(Integer, default=0) # 0: Offline/Disabled, 1: Online/Enabled
     last_sync_at = Column(DateTime, nullable=True)
     

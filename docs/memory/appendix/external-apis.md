@@ -21,7 +21,9 @@
 
 模型 Base URL 同样属于 SSRF 边界。即使只有管理员能配置，也不能忽略该风险，因为管理员账号可能被盗，配置也可能来自导入。
 
-MCP 请求和响应 DTO 必须分离。列表和详情只能返回 `has_auth_headers` 等标记，不能返回凭据。现有明文 `auth_headers` 必须加密并轮换，日志不能输出 Authorization 片段。
+MCP 请求和响应 DTO 已分离，列表和详情只返回 `has_auth_headers`、
+`credential_status` 等无值标记；新写入使用版本化密文，存量明文通过隔离命令迁移，
+日志不再输出 Authorization 片段。后续仍需接入 KMS 密钥版本和轮换演练。
 
 ## 可用性契约
 

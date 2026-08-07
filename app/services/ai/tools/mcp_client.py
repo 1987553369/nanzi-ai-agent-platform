@@ -10,7 +10,11 @@ from mcp import ClientSession, types
 from mcp.client.sse import sse_client
 from app.core.orm import AsyncSessionLocal
 from app.models.mcp import McpServer, McpToolCache
-from app.utils.mcp_credentials import decrypt_mcp_auth_headers
+from app.utils.mcp_credentials import (
+    McpCredentialError,
+    decrypt_mcp_auth_headers,
+    ensure_mcp_runtime_credential_access,
+)
 from app.utils.outbound_url_policy import OutboundUrlPolicyError, validate_outbound_url
 from sqlalchemy import select, update
 
@@ -18,10 +22,18 @@ logger = logging.getLogger(__name__)
 
 class McpSseSession:
     """Manages an MCP connection, supporting both standard SSE and Direct HTTP Post gateways"""
-    def __init__(self, server_id: str, sse_url: str, auth_headers: Optional[Dict] = None):
+    def __init__(
+        self,
+        server_id: str,
+        sse_url: str,
+        auth_headers: Optional[Dict] = None,
+        *,
+        managed: bool = True,
+    ):
         self.server_id = server_id
         self.sse_url = sse_url
         self.auth_headers = auth_headers or {}
+        self.managed = managed
         self.session: Optional[ClientSession] = None
         self.last_used_at = time.time()
         self._lock = asyncio.Lock()
@@ -163,17 +175,48 @@ class McpClientService:
     _cleanup_task: Optional[asyncio.Task] = None
 
     @classmethod
+    async def invalidate_session(cls, server_id: str) -> None:
+        session = cls._sessions.pop(server_id, None)
+        if session is not None:
+            await session.close()
+
+    @classmethod
     async def get_session(cls, server_id: str) -> McpSseSession:
         if not cls._cleanup_task:
             cls._cleanup_task = asyncio.create_task(cls._idle_cleanup_loop())
 
-        if server_id not in cls._sessions:
-            async with AsyncSessionLocal() as db:
-                result = await db.execute(select(McpServer).where(McpServer.id == server_id))
-                server = result.scalar_one_or_none()
-                if not server: raise ValueError(f"MCP Server {server_id} not found")
+        cached_session = cls._sessions.get(server_id)
+        if cached_session is not None and not cached_session.managed:
+            await cached_session.connect()
+            cached_session.update_activity()
+            return cached_session
+
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(select(McpServer).where(McpServer.id == server_id))
+            server = result.scalar_one_or_none()
+            if not server:
+                await cls.invalidate_session(server_id)
+                raise ValueError(f"MCP Server {server_id} not found")
+            try:
+                ensure_mcp_runtime_credential_access(
+                    enabled_status=server.enabled_status,
+                    stored_value=server.auth_headers,
+                    recorded_status=getattr(server, "auth_headers_status", None),
+                )
                 headers = decrypt_mcp_auth_headers(server.auth_headers)
-                cls._sessions[server_id] = McpSseSession(server_id, server.sse_url, headers)
+            except McpCredentialError:
+                await cls.invalidate_session(server_id)
+                raise
+            if cached_session is not None and (
+                cached_session.sse_url != server.sse_url
+                or cached_session.auth_headers != headers
+            ):
+                await cls.invalidate_session(server_id)
+                cached_session = None
+            if cached_session is None:
+                cls._sessions[server_id] = McpSseSession(
+                    server_id, server.sse_url, headers
+                )
 
         session = cls._sessions[server_id]
         await session.connect()

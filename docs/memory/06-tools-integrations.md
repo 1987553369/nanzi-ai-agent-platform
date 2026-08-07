@@ -43,12 +43,14 @@ AgentScope Toolkit
 
 ## 4. P0/P1：MCP 凭据和 SSRF
 
-- `McpServerResponse` 继承包含 `auth_headers` 的请求模型，任意登录用户列全局 MCP 时会收到凭据。见 `mcp.py:28-50,232-272`。
-- ORM 明文保存 `auth_headers`，见 `app/models/mcp.py:6-18`。
-- `/mcp/verify` 和个人 MCP 允许任意 URL/headers，服务端 GET/POST 且跟随重定向。见 `mcp.py:191-223,274-327`、`mcp_client.py:34-50,355-408`。
-- 日志输出 Authorization 前 15 个字符，见 `mcp_client.py:370-372`。
+- 历史审计发现响应回显 `auth_headers`、ORM 明文存储并在日志输出 Authorization 前缀。
+  `MCP-A` 已完成请求/响应 DTO 分离、`mcpheaders:v1:` 版本化密文、旧明文隔离迁移、
+  运行时拒绝明文、配置变化会话失效和只返回无值轮换状态。
+- `/mcp/verify` 与 MCP 调用已禁止 HTTP 重定向并接入 URL Policy；应用层 DNS 复查仍不能
+  单独证明抗 DNS Rebinding，生产环境仍需固定解析 Transport 或隔离出口代理。
 
-整改：请求/响应 DTO 分离；响应只返回 `has_auth_headers`；凭据 KMS/Fernet 加密且仅运行时解密；只允许 HTTPS；解析所有 A/AAAA 并拒绝 loopback/private/link-local/metadata；每跳重验 redirect 并 pin 解析结果；目标域 allowlist/管理员审批；个人 MCP 走隔离 egress proxy；限制危险 headers、响应大小、并发和超时。
+剩余整改：凭据接入 KMS/密钥版本和轮换演练；只允许 HTTPS；固定已校验解析结果；目标域
+allowlist/管理员审批；个人 MCP 走隔离 egress proxy；继续限制危险 headers、响应大小、并发和超时。
 
 ## 5. 文件与浏览器
 

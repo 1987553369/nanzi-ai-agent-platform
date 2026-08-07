@@ -118,6 +118,14 @@ python3 db-prod-pg/apply_sql.py \
 
 ## 八、管理员与运行时配置
 
+### MCP 历史明文凭据迁移
+
+V16 会先隔离并禁用旧明文 MCP 服务，随后必须在维护窗口使用当前
+`ENCRYPTION_KEY` 运行应用层迁移命令。完整步骤、返回码和人工轮换队列处理方式见
+[MCP 历史凭据加密迁移手册](../docs/MCP_CREDENTIAL_MIGRATION_CN.md)。
+
+### 管理员凭据
+
 ```bash
 ./db-prod-pg/create-admin-user.sh
 ./db-prod-pg/create-admin-key.sh admin
