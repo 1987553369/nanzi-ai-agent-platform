@@ -47,13 +47,16 @@
 | `SMTP_ALLOWED_PRIVATE_HOSTS` | `List[str]` | `[]` | `app/core/config.py:74` |
 | `SMTP_ALLOWED_PRIVATE_CIDRS` | `List[str]` | `[]` | `app/core/config.py:75` |
 | `SMTP_ALLOWED_PORTS` | `List[int]` | `[465, 587]` | `app/core/config.py:76` |
-| `MEMORY_BASE_HALF_LIFE` | `float` | `7.0` | `app/core/config.py:79` |
-| `MEMORY_CONSOLIDATION_THRESHOLD` | `float` | `0.82` | `app/core/config.py:80` |
-| `SSO_API_URL` | `str` | `'https://yovole.net/api/v1/user/check/login'` | `app/core/config.py:83` |
-| `SSO_ACCESS_TOKEN` | `str` | `'CHANGE_ME_SSO_ACCESS_TOKEN'` | `app/core/config.py:85` |
-| `SSO_REQUEST_SYSTEM` | `str` | `'NANZI_AI_AGENT_PLATFORM'` | `app/core/config.py:86` |
-| `SSO_REQUEST_BUSINESS` | `str` | `'USER-LOGIN'` | `app/core/config.py:87` |
-| `SSO_TIMEOUT` | `int` | `30` | `app/core/config.py:88` |
+| `DATA_SOURCE_ALLOWED_PRIVATE_HOSTS` | `List[str]` | `[]` | `app/core/config.py:79` |
+| `DATA_SOURCE_ALLOWED_PRIVATE_CIDRS` | `List[str]` | `[]` | `app/core/config.py:80` |
+| `DATA_SOURCE_ALLOWED_PORTS` | `List[int]` | `[1433, 1521, 2484, 3306, 5432, 9000, 9440]` | `app/core/config.py:81` |
+| `MEMORY_BASE_HALF_LIFE` | `float` | `7.0` | `app/core/config.py:84` |
+| `MEMORY_CONSOLIDATION_THRESHOLD` | `float` | `0.82` | `app/core/config.py:85` |
+| `SSO_API_URL` | `str` | `'https://yovole.net/api/v1/user/check/login'` | `app/core/config.py:88` |
+| `SSO_ACCESS_TOKEN` | `str` | `'CHANGE_ME_SSO_ACCESS_TOKEN'` | `app/core/config.py:90` |
+| `SSO_REQUEST_SYSTEM` | `str` | `'NANZI_AI_AGENT_PLATFORM'` | `app/core/config.py:91` |
+| `SSO_REQUEST_BUSINESS` | `str` | `'USER-LOGIN'` | `app/core/config.py:92` |
+| `SSO_TIMEOUT` | `int` | `30` | `app/core/config.py:93` |
 
 ## 数据库存储的系统配置
 

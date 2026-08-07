@@ -33,11 +33,33 @@ def test_build_sqlserver_odbc_dsn():
         }
     )
     assert "DRIVER={ODBC Driver 18 for SQL Server}" in dsn
-    assert "SERVER=mssql.local,1433" in dsn
-    assert "DATABASE=erp" in dsn
-    assert "UID=sa" in dsn
-    assert "PWD=secret" in dsn
-    assert "TrustServerCertificate=yes" in dsn
+    assert "SERVER={mssql.local,1433}" in dsn
+    assert "DATABASE={erp}" in dsn
+    assert "UID={sa}" in dsn
+    assert "PWD={secret}" in dsn
+    assert "Encrypt=yes" in dsn
+    assert "TrustServerCertificate=no" in dsn
+    assert "HostNameInCertificate={mssql.local}" in dsn
+
+
+def test_build_sqlserver_odbc_dsn_escapes_values_and_ipv6_server():
+    dsn = build_sqlserver_odbc_dsn(
+        {
+            "host": "mssql.internal",
+            "port": 1433,
+            "database": "erp;readonly=no",
+            "user": "reporter",
+            "password": "secret;TrustServerCertificate=yes}",
+        },
+        connect_address="2001:4860:4860::8888",
+        certificate_hostname="mssql.internal",
+    )
+
+    assert "SERVER={[2001:4860:4860::8888],1433}" in dsn
+    assert "DATABASE={erp;readonly=no}" in dsn
+    assert "PWD={secret;TrustServerCertificate=yes}}}" in dsn
+    assert dsn.count("TrustServerCertificate=yes") == 1
+    assert "TrustServerCertificate=no" in dsn
 
 
 def test_dialect_from_data_source_sqlserver():
@@ -88,14 +110,23 @@ async def test_pool_manager_create_sqlserver_pool():
     mock_aioodbc = MagicMock()
     mock_aioodbc.create_pool = AsyncMock(return_value=mock_pool)
 
-    with patch.dict("sys.modules", {"aioodbc": mock_aioodbc}):
+    target = SimpleNamespace(
+        connect_address="203.0.113.10",
+        hostname="mssql.local",
+        port=1433,
+    )
+    with patch.dict("sys.modules", {"aioodbc": mock_aioodbc}), patch(
+        "app.utils.database_outbound.resolve_database_target",
+        AsyncMock(return_value=target),
+    ):
         pool = await DataSourcePoolManager._create_sqlserver_pool(config)
 
     assert pool is mock_pool
     mock_aioodbc.create_pool.assert_awaited_once()
     dsn = mock_aioodbc.create_pool.await_args.kwargs["dsn"]
-    assert "SERVER=mssql.local,1433" in dsn
-    assert "DATABASE=erp" in dsn
+    assert "SERVER={203.0.113.10,1433}" in dsn
+    assert "HostNameInCertificate={mssql.local}" in dsn
+    assert "DATABASE={erp}" in dsn
 
 
 @pytest.mark.asyncio
@@ -118,11 +149,14 @@ async def test_db_import_service_sqlserver_connection():
         "password": "secret",
     }
 
-    with patch.dict("sys.modules", {"aioodbc": mock_aioodbc}):
+    with patch.object(
+        DBImportService,
+        "_sqlserver_connect",
+        AsyncMock(return_value=mock_conn),
+    ):
         ok = await DBImportService.test_sqlserver_connection(config)
 
     assert ok is True
-    mock_aioodbc.connect.assert_awaited_once()
     mock_cursor.execute.assert_awaited_with("SELECT 1")
     mock_conn.close.assert_awaited_once()
 
@@ -158,7 +192,11 @@ async def test_db_import_service_sqlserver_tables_and_ddl():
         ]
     )
 
-    with patch.dict("sys.modules", {"aioodbc": mock_aioodbc}):
+    with patch.object(
+        DBImportService,
+        "_sqlserver_connect",
+        AsyncMock(return_value=mock_conn),
+    ):
         tables = await DBImportService.get_sqlserver_tables(config)
         ddl = await DBImportService.get_sqlserver_ddl(config, ["users"])
 

@@ -35,9 +35,13 @@ def is_postgresql_type(db_type: str) -> bool:
     return str(db_type or "").strip().lower() in POSTGRESQL_TYPES
 
 
-def build_postgresql_conninfo(config: Dict[str, Any]) -> Dict[str, Any]:
+def build_postgresql_conninfo(
+    config: Dict[str, Any],
+    *,
+    connect_address: Optional[str] = None,
+) -> Dict[str, Any]:
     """Build psycopg connection kwargs from a saved data-source config."""
-    return {
+    conninfo = {
         "host": config.get("host"),
         "port": int(config.get("port") or 5432),
         "dbname": config.get("database") or config.get("database_name"),
@@ -45,6 +49,9 @@ def build_postgresql_conninfo(config: Dict[str, Any]) -> Dict[str, Any]:
         "password": config.get("password") or "",
         "connect_timeout": 10,
     }
+    if connect_address:
+        conninfo["hostaddr"] = connect_address
+    return conninfo
 
 
 def split_postgresql_identifier(name: str) -> Tuple[Optional[str], str]:

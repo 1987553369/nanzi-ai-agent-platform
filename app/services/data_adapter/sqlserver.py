@@ -31,21 +31,36 @@ class SqlLabUndefined(Undefined):
 SQL_LAB_ENV = Environment(loader=BaseLoader(), undefined=SqlLabUndefined)
 
 
-def build_sqlserver_odbc_dsn(config: Dict[str, Any]) -> str:
+def _odbc_escape(value: Any) -> str:
+    return "{" + str(value or "").replace("}", "}}") + "}"
+
+
+def build_sqlserver_odbc_dsn(
+    config: Dict[str, Any],
+    *,
+    connect_address: Optional[str] = None,
+    certificate_hostname: Optional[str] = None,
+) -> str:
     """构建 SQL Server ODBC 连接串（供连接池与导入服务共用）。"""
     driver = os.environ.get("MSSQL_ODBC_DRIVER", "ODBC Driver 18 for SQL Server")
     port = int(config.get("port", 1433))
-    server = f"{config.get('host')},{port}"
+    original_host = str(config.get("host") or "")
+    server_host = str(connect_address or original_host)
+    if ":" in server_host and not server_host.startswith("["):
+        server_host = f"[{server_host}]"
+    server = f"{server_host},{port}"
     database = config.get("database") or config.get("database_name") or ""
     user = config.get("user") or config.get("db_user") or ""
     password = config.get("password") or ""
     return (
-        f"DRIVER={{{driver}}};"
-        f"SERVER={server};"
-        f"DATABASE={database};"
-        f"UID={user};"
-        f"PWD={password};"
-        f"TrustServerCertificate=yes;"
+        f"DRIVER={_odbc_escape(driver)};"
+        f"SERVER={_odbc_escape(server)};"
+        f"DATABASE={_odbc_escape(database)};"
+        f"UID={_odbc_escape(user)};"
+        f"PWD={_odbc_escape(password)};"
+        "Encrypt=yes;"
+        "TrustServerCertificate=no;"
+        f"HostNameInCertificate={_odbc_escape(certificate_hostname or original_host)};"
     )
 
 

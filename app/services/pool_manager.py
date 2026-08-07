@@ -146,9 +146,12 @@ class DataSourcePoolManager:
     async def _create_mysql_pool(cls, db_config: Any) -> Any:
         """创建 MySQL 连接池"""
         import aiomysql
+        from app.utils.database_outbound import resolve_database_target
+
+        target = await resolve_database_target(db_config.host, int(db_config.port))
         pool = await aiomysql.create_pool(
-            host=db_config.host,
-            port=int(db_config.port),
+            host=target.connect_address,
+            port=target.port,
             db=db_config.database_name,
             user=db_config.db_user,
             password=db_config.password,
@@ -162,9 +165,12 @@ class DataSourcePoolManager:
     async def _create_clickhouse_pool(cls, db_config: Any) -> Any:
         """创建 ClickHouse 连接池"""
         from asynch.pool import Pool as AsynchPool
+        from app.utils.database_outbound import resolve_database_target
+
+        target = await resolve_database_target(db_config.host, int(db_config.port))
         pool = AsynchPool(
-            host=db_config.host,
-            port=int(db_config.port),
+            host=target.connect_address,
+            port=target.port,
             database=db_config.database_name or "default",
             user=db_config.db_user or "default",
             password=db_config.password or "",
@@ -179,6 +185,9 @@ class DataSourcePoolManager:
         """创建 SQL Server 连接池"""
         import aioodbc
         from app.services.data_adapter.sqlserver import build_sqlserver_odbc_dsn
+        from app.utils.database_outbound import resolve_database_target
+
+        target = await resolve_database_target(db_config.host, int(db_config.port))
 
         dsn = build_sqlserver_odbc_dsn(
             {
@@ -187,7 +196,9 @@ class DataSourcePoolManager:
                 "database": db_config.database_name,
                 "user": db_config.db_user,
                 "password": db_config.password,
-            }
+            },
+            connect_address=target.connect_address,
+            certificate_hostname=target.hostname,
         )
         pool = await aioodbc.create_pool(
             dsn=dsn,
@@ -202,6 +213,9 @@ class DataSourcePoolManager:
         """创建 PostgreSQL 异步连接池。"""
         from psycopg_pool import AsyncConnectionPool
         from app.services.data_adapter.postgresql import build_postgresql_conninfo
+        from app.utils.database_outbound import resolve_database_target
+
+        target = await resolve_database_target(db_config.host, int(db_config.port))
 
         async def configure_connection(connection: Any) -> None:
             """让未带 schema 的表名也能解析到用户业务 schema。"""
@@ -229,7 +243,8 @@ class DataSourcePoolManager:
                 "database": db_config.database_name,
                 "user": db_config.db_user,
                 "password": db_config.password,
-            }
+            },
+            connect_address=target.connect_address,
         )
         pool = AsyncConnectionPool(
             kwargs=conninfo,
@@ -245,15 +260,21 @@ class DataSourcePoolManager:
     async def _create_oracle_pool(cls, db_config: Any) -> Any:
         """创建 Oracle 连接池"""
         import oracledb
+        from app.utils.database_outbound import resolve_database_target
+
+        target = await resolve_database_target(db_config.host, int(db_config.port))
         
         # 组装 DSN：由于智能体平台没有 extra_params，我们将 database_name 默认作为 SID 构建。
         # 如果用户名/密码/端口配置正确，可以直接通过 SID 连接。
         # 兼容性设计：若 database_name 包含斜杠（如 '/ORCL'），则默认当作服务名构建 DSN。
         db_name = db_config.database_name.strip()
         if db_name.startswith("/"):
-            dsn = f"{db_config.host}:{db_config.port}{db_name}"
+            connect_host = target.connect_address
+            if ":" in connect_host:
+                connect_host = f"[{connect_host}]"
+            dsn = f"{connect_host}:{target.port}{db_name}"
         else:
-            dsn = oracledb.makedsn(db_config.host, int(db_config.port), sid=db_name)
+            dsn = oracledb.makedsn(target.connect_address, target.port, sid=db_name)
 
         use_thick_mode = os.environ.get("USE_ORACLE_THICK_MODE") == "1"
         

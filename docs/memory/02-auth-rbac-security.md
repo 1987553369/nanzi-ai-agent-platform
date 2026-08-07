@@ -38,11 +38,13 @@
 - MCP 凭据回显、明文保存和日志前缀泄露属于历史发现，已在 `MCP-A` 修复：响应只返回
   `has_auth_headers`/`credential_status`，新写入使用 `mcpheaders:v1:` 密文，存量明文先禁用
   隔离再由离线命令迁移，运行时拒绝明文回退。剩余工作是接入 KMS 和演练密钥轮换。
-- `NET-A/NET-B/NET-C/NET-D/NET-E` 已为 MCP、用户 HTTP 工具、公开网页抓取、Generic API、模型发现/
-  Embedding、HTTP Webhook、SSO、RAGFlow、OpenClaw、External SQL HTTP 网关和 SMTP 接入固定解析；
+- `NET-A/NET-B/NET-C/NET-D/NET-E/NET-F` 已为 MCP、用户 HTTP 工具、公开网页抓取、Generic API、模型发现/
+  Embedding、HTTP Webhook、SSO、RAGFlow、OpenClaw、External SQL HTTP 网关、SMTP 和数据库原生协议接入固定解析；
   受控私网目标要求集成专属精确 Host 与 CIDR 双重审批，存量模型/RAGFlow/OpenClaw Key 绑定
-  Origin；SMTP 还要求部署端口审批并禁止 TLS 降级。数据库原生协议、AgentScope SDK 与生产
-  egress 仍需继续治理。
+  Origin；SMTP 和数据库同时要求部署端口审批，SQL Server 已禁止信任任意证书。AgentScope SDK、
+  MySQL/ClickHouse/Oracle CA/TLS 配置模型与生产 egress 仍需继续治理。
+- 外部数据源密码当前仍由 `meta_db_connection_configs.password` 明文保存，并由安全响应模型回传
+  前端；必须像 MCP 凭据一样增加版本化密文、存量隔离迁移和不回显状态字段。
 - SSO 已强制 HTTPS/TLS 证书校验、固定 DNS 解析并禁止环境代理和自动重定向；登录失败不再向
   未认证调用者回显底层连接异常。后续仍需补充服务端响应签名、防重放和真实不可信证书联调。
 - Cookie 固定 `secure=False`，长期 API Key 返回浏览器并保存在 `localStorage`。

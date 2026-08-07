@@ -101,6 +101,24 @@ def test_smtp_allowed_ports_must_be_nonempty_valid_tcp_ports(ports):
         settings.validate_runtime_configuration()
 
 
+def test_data_source_private_approval_requires_exact_host_and_cidr():
+    settings = _build_settings(
+        DATA_SOURCE_ALLOWED_PRIVATE_HOSTS=["db.internal"],
+        DATA_SOURCE_ALLOWED_PRIVATE_CIDRS=[],
+    )
+
+    with pytest.raises(ValueError, match="DATA_SOURCE.*同时配置"):
+        settings.validate_runtime_configuration()
+
+
+@pytest.mark.parametrize("ports", [[], [0], [65536]])
+def test_data_source_allowed_ports_must_be_nonempty_valid_tcp_ports(ports):
+    settings = _build_settings(DATA_SOURCE_ALLOWED_PORTS=ports)
+
+    with pytest.raises(ValueError, match="数据源端口审批配置无效"):
+        settings.validate_runtime_configuration()
+
+
 @pytest.mark.parametrize(
     ("overrides", "message"),
     [

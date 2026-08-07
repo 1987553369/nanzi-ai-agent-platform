@@ -52,7 +52,7 @@
 |---|---|---|
 | AUTH-P0-02 | 第三方跨域 Embed 仍需要短期、限受众 Embed Token 签发/撤销服务 | 新增 Token 表/签发接口、Origin/Agent 绑定、TTL、撤销和审计后再开放生产跨域嵌入 |
 | SEC-P0-02 | 代码执行当前只做了权限止血，执行进程仍在平台边界内 | 独立 Worker/Queue，非 root、只读根、无 Secret、网络/CPU/内存/PID/超时策略 |
-| NET-P0-02 | MCP、用户 HTTP 工具、公开网页抓取、Generic API、模型发现/Embedding、HTTP Webhook、SSO、RAGFlow、OpenClaw、External SQL HTTP 网关和 SMTP 已接入固定解析；受控私网目标要求集成专属精确 Host + CIDR 双重审批。SMTP 465 使用隐式 TLS，其他批准端口强制 STARTTLS。动态浏览器任意 URL 已 fail-closed；数据库原生协议、AgentScope 模型 SDK 及生产网络层仍待治理 | 将 Host/CIDR/端口审批纳入部署变更和审计；继续完成数据库原生协议固定解析、Browser Worker、egress proxy/NetworkPolicy、响应字节上限和跨协议重绑定演练 |
+| NET-P0-02 | MCP、用户 HTTP 工具、公开网页抓取、Generic API、模型发现/Embedding、HTTP Webhook、SSO、RAGFlow、OpenClaw、External SQL HTTP 网关、SMTP 和用户配置的数据库原生协议已接入固定解析；受控私网目标要求精确 Host + CIDR 双重审批并限制端口。SMTP 强制 TLS；SQL Server 强制证书校验。动态浏览器任意 URL 已 fail-closed；AgentScope 模型 SDK、MySQL/ClickHouse/Oracle TLS 配置模型及生产网络层仍待治理 | 将 Host/CIDR/端口审批纳入部署变更和审计；继续完成数据库凭据加密和各驱动 CA/TLS 配置、Browser Worker、egress proxy/NetworkPolicy、响应字节上限和跨协议重绑定演练 |
 
 ## 四、产品与平台完善（2-9 个月）
 
@@ -109,3 +109,5 @@
 | 2026-08-07 | NET-D 验证 | Python 3.11 出网、集成、MCP、凭据和 SSO 核心安全契约 82 项通过；Python 3.9 配置契约 19 项通过；本批 Python 文件编译和 `git diff --check` 通过。RAGFlow/OpenClaw/External SQL 专项测试已同步更新，但本机缺少 `aiomysql`、`psycopg`、`sqlglot` 和完整 Python 3.11 原生依赖，需标准 CI 回归；未连接真实外部服务、数据库或启动部署 |
 | 2026-08-07 | NET-E（SMTP） | 三个重复邮件发送入口统一收敛到策略发送器；全量校验 DNS A/AAAA 后仅连接已批准 IP，TLS SNI/证书主机名仍使用原域名；私网目标要求 SMTP 专属精确 Host + CIDR；部署端口白名单默认仅 465/587；465 使用隐式 TLS，其他批准端口强制 STARTTLS，禁止明文降级；工具和通知接口不再回显底层连接异常 |
 | 2026-08-07 | NET-E 验证 | Python 3.9 离线 SMTP/配置安全契约 39 项通过，扩大后的出站/SSO 核心回归 92 项通过；Python 3.11 本批文件定向编译和 `git diff --check` 通过。Python 3.11 本机未安装 pytest，完整应用测试仍受缺少 `aiomysql`、`sqlglot` 等原生依赖影响，需标准 CI 回归；未连接真实 SMTP、数据库或启动部署 |
+| 2026-08-07 | NET-F（数据库原生协议） | MySQL、PostgreSQL、ClickHouse、Oracle、SQL Server 的连接池、即时连接、表发现、DDL 拉取和长会话统一接入部署侧 Host + CIDR + 端口审批；全量校验 A/AAAA 后驱动只连接固定 IP；PostgreSQL 使用原 Host + `hostaddr`；SQL Server 使用固定 IP 并强制 `Encrypt=yes`、`TrustServerCertificate=no`、原域名 `HostNameInCertificate`；ODBC 参数统一转义；客户端不再回显驱动底层异常 |
+| 2026-08-07 | NET-F 验证 | Python 3.9 数据库出站专项 102 项、扩大后的出站/SSO 核心回归 113 项通过；Python 3.11 本批文件定向编译和 `git diff --check` 通过。本机缺少 `aiomysql`、`asynch`、`oracledb`、`psycopg`、`aioodbc` 和 `sqlglot`，驱动 mock/集成测试需标准 CI 回归；未连接真实数据库或执行迁移。MySQL/ClickHouse/Oracle 的 CA/TLS 配置模型及数据库凭据加密另列后续高优先级批次 |

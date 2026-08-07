@@ -75,6 +75,11 @@ class Settings(BaseSettings):
     SMTP_ALLOWED_PRIVATE_CIDRS: List[str] = []
     SMTP_ALLOWED_PORTS: List[int] = [465, 587]
 
+    # User-configured native database egress.
+    DATA_SOURCE_ALLOWED_PRIVATE_HOSTS: List[str] = []
+    DATA_SOURCE_ALLOWED_PRIVATE_CIDRS: List[str] = []
+    DATA_SOURCE_ALLOWED_PORTS: List[int] = [1433, 1521, 2484, 3306, 5432, 9000, 9440]
+
     # Ebbinghaus Memory Configs
     MEMORY_BASE_HALF_LIFE: float = 7.0
     MEMORY_CONSOLIDATION_THRESHOLD: float = 0.82
@@ -91,6 +96,7 @@ class Settings(BaseSettings):
         """Reject unusable placeholder secrets before a production process serves traffic."""
         from app.utils.outbound_url_policy import create_private_network_access_policy
         from app.utils.smtp_policy import validate_smtp_allowed_ports
+        from app.utils.database_outbound import validate_database_allowed_ports
 
         private_network_configs = {
             "RAGFLOW": (
@@ -109,6 +115,10 @@ class Settings(BaseSettings):
                 self.SMTP_ALLOWED_PRIVATE_HOSTS,
                 self.SMTP_ALLOWED_PRIVATE_CIDRS,
             ),
+            "DATA_SOURCE": (
+                self.DATA_SOURCE_ALLOWED_PRIVATE_HOSTS,
+                self.DATA_SOURCE_ALLOWED_PRIVATE_CIDRS,
+            ),
         }
         private_network_errors = []
         for integration, (allowed_hosts, allowed_cidrs) in private_network_configs.items():
@@ -124,6 +134,10 @@ class Settings(BaseSettings):
             validate_smtp_allowed_ports(self.SMTP_ALLOWED_PORTS)
         except ValueError as exc:
             raise ValueError(f"SMTP 端口审批配置无效: {exc}") from exc
+        try:
+            validate_database_allowed_ports(self.DATA_SOURCE_ALLOWED_PORTS)
+        except ValueError as exc:
+            raise ValueError(f"数据源端口审批配置无效: {exc}") from exc
 
         if self.API_SERVICE_ENV.strip().lower() not in {"prod", "production"}:
             return

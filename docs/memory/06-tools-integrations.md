@@ -79,8 +79,12 @@ Webhook 接入固定解析 Client；动态 URL 模板不得修改 Origin，模�
 目标必须同时命中部署侧精确 Host 与 CIDR，凭据绑定 Origin，且三个集成不能复用审批范围。
 `NET-E` 已将通知测试、任务邮件和 Agent 邮件工具统一收敛到 SMTP 策略发送器；全量 DNS
 校验后固定连接 IP，465 使用隐式 TLS，其他批准端口强制 STARTTLS，TLS 仍以原域名校验证书；
-私网 SMTP 需要独立 Host + CIDR 审批。剩余出网治理：数据库原生协议、AgentScope 模型 SDK，
-以及响应字节上限、熔断/审计和生产 egress 策略。
+私网 SMTP 需要独立 Host + CIDR 审批。
+`NET-F` 已将五类数据库原生协议的连接池和导入入口接入固定解析与独立端口审批；PostgreSQL
+保留原 Host 做 TLS 语义，SQL Server 强制证书验证。剩余出网治理：AgentScope 模型 SDK、
+MySQL/ClickHouse/Oracle CA/TLS 配置模型，以及响应字节上限、熔断/审计和生产 egress 策略。
+
+外部数据源密码仍为明文存储和前端回传，必须在后续凭据批次完成密文迁移与状态化响应。
 
 ## 7. 工具治理目标
 

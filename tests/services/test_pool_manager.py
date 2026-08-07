@@ -114,10 +114,16 @@ async def test_pool_manager_oracle_mode_dsn():
     mock_oracledb = MagicMock()
     mock_oracledb.create_pool_async = AsyncMock()
     mock_oracledb.makedsn = lambda host, port, sid: f"(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST={host})(PORT={port}))(CONNECT_DATA=(SID={sid})))"
+    target = SimpleNamespace(
+        connect_address="203.0.113.20",
+        hostname="oracle.host",
+        port=1521,
+    )
     
     # Mock `import oracledb` 并调用 _create_oracle_pool 
     with patch.dict("sys.modules", {"oracledb": mock_oracledb}), \
-         patch.dict("os.environ", {"USE_ORACLE_THICK_MODE": "0"}): # Thin mode
+         patch.dict("os.environ", {"USE_ORACLE_THICK_MODE": "0"}), \
+         patch("app.utils.database_outbound.resolve_database_target", AsyncMock(return_value=target)): # Thin mode
          
         # SID 模式测试
         await DataSourcePoolManager._create_oracle_pool(config_sid)
@@ -130,7 +136,7 @@ async def test_pool_manager_oracle_mode_dsn():
         await DataSourcePoolManager._create_oracle_pool(config_sn)
         mock_oracledb.create_pool_async.assert_called_once()
         dsn_called_sn = mock_oracledb.create_pool_async.call_args[1]["dsn"]
-        assert dsn_called_sn == "oracle.host:1521/ORCLPDB"
+        assert dsn_called_sn == "203.0.113.20:1521/ORCLPDB"
 
 @pytest.mark.asyncio
 async def test_pool_manager_sqlserver_type_routing():

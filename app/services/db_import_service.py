@@ -22,7 +22,71 @@ class DBImportService:
 
     @staticmethod
     async def _postgresql_connect(config: Dict[str, Any]):
-        return await psycopg.AsyncConnection.connect(**build_postgresql_conninfo(config))
+        from app.utils.database_outbound import resolve_database_target
+
+        target = await resolve_database_target(
+            config.get("host"),
+            int(config.get("port", 5432)),
+        )
+        return await psycopg.AsyncConnection.connect(
+            **build_postgresql_conninfo(
+                config,
+                connect_address=target.connect_address,
+            )
+        )
+
+    @staticmethod
+    async def _mysql_connect(config: Dict[str, Any]):
+        from app.utils.database_outbound import resolve_database_target
+
+        target = await resolve_database_target(
+            config.get("host"),
+            int(config.get("port", 3306)),
+        )
+        return await aiomysql.connect(
+            host=target.connect_address,
+            port=target.port,
+            user=config.get("user"),
+            password=config.get("password"),
+            db=config.get("database"),
+            connect_timeout=10,
+        )
+
+    @staticmethod
+    async def _clickhouse_connect(config: Dict[str, Any]):
+        from app.utils.database_outbound import resolve_database_target
+
+        port = int(config.get("port", 9000))
+        if port == 8123:
+            raise ValueError("端口 8123 为 HTTP 协议，当前仅支持 ClickHouse Native TCP")
+        target = await resolve_database_target(config.get("host"), port)
+        connection = asynch.Connection(
+            host=target.connect_address,
+            port=target.port,
+            user=config.get("user"),
+            password=config.get("password"),
+            database=config.get("database"),
+            connect_timeout=10,
+        )
+        await connection.connect()
+        return connection
+
+    @staticmethod
+    async def _sqlserver_connect(config: Dict[str, Any]):
+        import aioodbc
+        from app.services.data_adapter.sqlserver import build_sqlserver_odbc_dsn
+        from app.utils.database_outbound import resolve_database_target
+
+        target = await resolve_database_target(
+            config.get("host"),
+            int(config.get("port", 1433)),
+        )
+        dsn = build_sqlserver_odbc_dsn(
+            config,
+            connect_address=target.connect_address,
+            certificate_hostname=target.hostname,
+        )
+        return await aioodbc.connect(dsn=dsn, timeout=10)
 
     @staticmethod
     async def test_postgresql_connection(config: Dict[str, Any]) -> bool:
@@ -35,7 +99,7 @@ class DBImportService:
             return True
         except Exception as e:
             logger.error(f"PostgreSQL connection test failed: {e}")
-            raise Exception(f"PostgreSQL 连接失败: {str(e)}")
+            raise Exception("PostgreSQL 连接失败，请检查配置和部署出站策略")
         finally:
             if conn:
                 await conn.close()
@@ -71,7 +135,7 @@ class DBImportService:
             ]
         except Exception as e:
             logger.error(f"Failed to get PostgreSQL tables: {e}")
-            raise Exception(f"获取 PostgreSQL 表列表失败: {str(e)}")
+            raise Exception("获取 PostgreSQL 表列表失败，请检查数据源配置")
         finally:
             if conn:
                 await conn.close()
@@ -161,7 +225,7 @@ class DBImportService:
             return await DBImportService._get_postgresql_ddl_from_connection(conn, table_names)
         except Exception as e:
             logger.error(f"Failed to get PostgreSQL DDL: {e}")
-            raise Exception(f"获取 PostgreSQL DDL 失败: {str(e)}")
+            raise Exception("获取 PostgreSQL DDL 失败，请检查数据源配置")
         finally:
             if conn:
                 await conn.close()
@@ -170,56 +234,30 @@ class DBImportService:
     async def test_mysql_connection(config: Dict[str, Any]) -> bool:
         """测试 MySQL 连接"""
         try:
-            conn = await aiomysql.connect(
-                host=config.get('host'),
-                port=int(config.get('port', 3306)),
-                user=config.get('user'),
-                password=config.get('password'),
-                db=config.get('database'),
-                connect_timeout=10
-            )
+            conn = await DBImportService._mysql_connect(config)
             conn.close()
             return True
         except Exception as e:
             logger.error(f"MySQL connection test failed: {e}")
-            raise Exception(f"MySQL 连接失败: {str(e)}")
+            raise Exception("MySQL 连接失败，请检查配置和部署出站策略")
 
     @staticmethod
     async def test_clickhouse_connection(config: Dict[str, Any]) -> bool:
         """测试 ClickHouse 连接"""
         try:
-            # Note: ClickHouse common ports are 9000 (TCP) and 8123 (HTTP).
-            # 'asynch' uses the native TCP protocol.
-            port = int(config.get('port', 9000))
-            if port == 8123:
-                 raise Exception("端口 8123 为 HTTP 协议，当前系统仅支持 9000 (TCP) 协议。请确认端口设置。")
-            
-            conn = asynch.Connection(
-                host=config.get('host'),
-                port=port,
-                user=config.get('user'),
-                password=config.get('password'),
-                database=config.get('database'),
-                connect_timeout=10
-            )
-            await conn.connect()
+            conn = await DBImportService._clickhouse_connect(config)
             await conn.close()
             return True
         except Exception as e:
             logger.error(f"ClickHouse connection test failed: {e}")
-            raise Exception(f"ClickHouse 连接失败: {str(e)}")
+            raise Exception("ClickHouse 连接失败，请检查配置和部署出站策略")
 
     @staticmethod
     async def get_mysql_tables(config: Dict[str, Any]) -> List[Dict[str, str]]:
         """获取 MySQL 表列表及其备注 (包含视图类型)"""
+        conn = None
         try:
-            conn = await aiomysql.connect(
-                host=config.get('host'),
-                port=int(config.get('port', 3306)),
-                user=config.get('user'),
-                password=config.get('password'),
-                db=config.get('database')
-            )
+            conn = await DBImportService._mysql_connect(config)
             async with conn.cursor() as cur:
                 # Query information_schema for names, comments, and types
                 query = """
@@ -237,22 +275,15 @@ class DBImportService:
                     } for row in res
                 ]
         finally:
-            conn.close()
+            if conn:
+                conn.close()
 
     @staticmethod
     async def get_clickhouse_tables(config: Dict[str, Any]) -> List[Dict[str, str]]:
         """获取 ClickHouse 表列表及其备注 (包含视图类型)"""
+        conn = None
         try:
-            port = int(config.get('port', 9000))
-            conn = asynch.Connection(
-                host=config.get('host'),
-                port=port,
-                user=config.get('user'),
-                password=config.get('password'),
-                database=config.get('database'),
-                connect_timeout=10
-            )
-            await conn.connect()
+            conn = await DBImportService._clickhouse_connect(config)
             async with conn.cursor() as cur:
                 # Use system.tables for name, comment and engine. 
                 try:
@@ -284,23 +315,18 @@ class DBImportService:
                     raise e
         except Exception as e:
             logger.error(f"Failed to get ClickHouse tables: {e}")
-            raise Exception(f"获取 ClickHouse 表列表失败: {str(e)}")
+            raise Exception("获取 ClickHouse 表列表失败，请检查数据源配置")
         finally:
-            if 'conn' in locals():
+            if conn:
                 await conn.close()
 
     @staticmethod
     async def get_mysql_ddl(config: Dict[str, Any], table_names: List[str]) -> str:
         """获取 MySQL DDL"""
         ddls = []
+        conn = None
         try:
-            conn = await aiomysql.connect(
-                host=config.get('host'),
-                port=int(config.get('port', 3306)),
-                user=config.get('user'),
-                password=config.get('password'),
-                db=config.get('database')
-            )
+            conn = await DBImportService._mysql_connect(config)
             async with conn.cursor() as cur:
                 for table in table_names:
                     await cur.execute(f"SHOW CREATE TABLE `{table}`")
@@ -309,23 +335,16 @@ class DBImportService:
                         ddls.append(res[1] + ";")
             return "\n\n".join(ddls)
         finally:
-            conn.close()
+            if conn:
+                conn.close()
 
     @staticmethod
     async def get_clickhouse_ddl(config: Dict[str, Any], table_names: List[str]) -> str:
         """获取 ClickHouse DDL"""
         ddls = []
+        conn = None
         try:
-            port = int(config.get('port', 9000))
-            conn = asynch.Connection(
-                host=config.get('host'),
-                port=port,
-                user=config.get('user'),
-                password=config.get('password'),
-                database=config.get('database'),
-                connect_timeout=10
-            )
-            await conn.connect()
+            conn = await DBImportService._clickhouse_connect(config)
             async with conn.cursor() as cur:
                 for table in table_names:
                     await cur.execute(f"SHOW CREATE TABLE `{table}`")
@@ -335,17 +354,23 @@ class DBImportService:
             return "\n\n".join(ddls)
         except Exception as e:
             logger.error(f"Failed to get ClickHouse DDL: {e}")
-            raise Exception(f"获取 ClickHouse DDL 失败: {str(e)}")
+            raise Exception("获取 ClickHouse DDL 失败，请检查数据源配置")
         finally:
-            if 'conn' in locals():
+            if conn:
                 await conn.close()
 
     @staticmethod
     async def _get_oracle_dsn(config: Dict[str, Any]) -> str:
         """构建 Oracle DSN"""
+        from app.utils.database_outbound import resolve_database_target
+
+        target = await resolve_database_target(
+            config.get("host"),
+            int(config.get("port", 1521)),
+        )
         return oracledb.makedsn(
-            config.get('host'),
-            int(config.get('port', 1521)),
+            target.connect_address,
+            target.port,
             sid=config.get('database') if not config.get('service_name') else None,
             service_name=config.get('service_name')
         )
@@ -377,7 +402,7 @@ class DBImportService:
                 return True
         except Exception as e:
             logger.error(f"Oracle connection test failed: {e}")
-            raise Exception(f"Oracle 连接失败: {str(e)}")
+            raise Exception("Oracle 连接失败，请检查配置和部署出站策略")
 
     @staticmethod
     async def get_oracle_tables(config: Dict[str, Any]) -> List[Dict[str, str]]:
@@ -420,7 +445,7 @@ class DBImportService:
                         ]
         except Exception as e:
             logger.error(f"Failed to get Oracle tables: {e}")
-            raise Exception(f"获取 Oracle 表列表失败: {str(e)}")
+            raise Exception("获取 Oracle 表列表失败，请检查数据源配置")
 
     @staticmethod
     async def get_oracle_ddl(config: Dict[str, Any], table_names: List[str]) -> str:
@@ -482,7 +507,7 @@ class DBImportService:
                         return await process_ddls(cur, table_types_map)
         except Exception as e:
             logger.error(f"Failed to get Oracle DDL: {e}")
-            raise Exception(f"获取 Oracle DDL 失败: {str(e)}")
+            raise Exception("获取 Oracle DDL 失败，请检查数据源配置")
 
     @staticmethod
     def _sqlserver_type_aliases() -> tuple:
@@ -492,11 +517,7 @@ class DBImportService:
     async def test_sqlserver_connection(config: Dict[str, Any]) -> bool:
         """测试 SQL Server 连接"""
         try:
-            import aioodbc
-            from app.services.data_adapter.sqlserver import build_sqlserver_odbc_dsn
-
-            dsn = build_sqlserver_odbc_dsn(config)
-            conn = await aioodbc.connect(dsn=dsn, timeout=10)
+            conn = await DBImportService._sqlserver_connect(config)
             try:
                 async with conn.cursor() as cur:
                     await cur.execute("SELECT 1")
@@ -506,17 +527,13 @@ class DBImportService:
             return True
         except Exception as e:
             logger.error(f"SQL Server connection test failed: {e}")
-            raise Exception(f"SQL Server 连接失败: {str(e)}")
+            raise Exception("SQL Server 连接失败，请检查配置和部署出站策略")
 
     @staticmethod
     async def get_sqlserver_tables(config: Dict[str, Any]) -> List[Dict[str, str]]:
         """获取 SQL Server 表列表及其备注 (包含视图类型)"""
         try:
-            import aioodbc
-            from app.services.data_adapter.sqlserver import build_sqlserver_odbc_dsn
-
-            dsn = build_sqlserver_odbc_dsn(config)
-            conn = await aioodbc.connect(dsn=dsn, timeout=10)
+            conn = await DBImportService._sqlserver_connect(config)
             try:
                 query = """
                     SELECT
@@ -542,7 +559,7 @@ class DBImportService:
                 await conn.close()
         except Exception as e:
             logger.error(f"Failed to get SQL Server tables: {e}")
-            raise Exception(f"获取 SQL Server 表列表失败: {str(e)}")
+            raise Exception("获取 SQL Server 表列表失败，请检查数据源配置")
 
     @staticmethod
     def _format_sqlserver_column_type(row: tuple) -> str:
@@ -561,11 +578,7 @@ class DBImportService:
     async def get_sqlserver_ddl(config: Dict[str, Any], table_names: List[str]) -> str:
         """获取 SQL Server DDL (支持 TABLE 和 VIEW)"""
         try:
-            import aioodbc
-            from app.services.data_adapter.sqlserver import build_sqlserver_odbc_dsn
-
-            dsn = build_sqlserver_odbc_dsn(config)
-            conn = await aioodbc.connect(dsn=dsn, timeout=10)
+            conn = await DBImportService._sqlserver_connect(config)
             ddls: List[str] = []
             try:
                 async with conn.cursor() as cur:
@@ -624,7 +637,7 @@ class DBImportService:
             return "\n\n".join(ddls)
         except Exception as e:
             logger.error(f"Failed to get SQL Server DDL: {e}")
-            raise Exception(f"获取 SQL Server DDL 失败: {str(e)}")
+            raise Exception("获取 SQL Server DDL 失败，请检查数据源配置")
 
 
 class DbDdlSession:
@@ -639,24 +652,9 @@ class DbDdlSession:
 
     async def __aenter__(self) -> "DbDdlSession":
         if self.db_type == "mysql":
-            self._conn = await aiomysql.connect(
-                host=self.config.get("host"),
-                port=int(self.config.get("port", 3306)),
-                user=self.config.get("user"),
-                password=self.config.get("password"),
-                db=self.config.get("database"),
-            )
+            self._conn = await DBImportService._mysql_connect(self.config)
         elif self.db_type == "clickhouse":
-            port = int(self.config.get("port", 9000))
-            self._conn = asynch.Connection(
-                host=self.config.get("host"),
-                port=port,
-                user=self.config.get("user"),
-                password=self.config.get("password"),
-                database=self.config.get("database"),
-                connect_timeout=10,
-            )
-            await self._conn.connect()
+            self._conn = await DBImportService._clickhouse_connect(self.config)
         elif self.db_type == "oracle":
             dsn = await DBImportService._get_oracle_dsn(self.config)
             user = self.config.get("user")
@@ -683,11 +681,7 @@ class DbDdlSession:
                     rows = await cur.fetchall()
                     self._oracle_table_types = {row[0].upper(): row[1] for row in rows}
         elif self.db_type in DBImportService._sqlserver_type_aliases():
-            import aioodbc
-            from app.services.data_adapter.sqlserver import build_sqlserver_odbc_dsn
-
-            dsn = build_sqlserver_odbc_dsn(self.config)
-            self._conn = await aioodbc.connect(dsn=dsn, timeout=10)
+            self._conn = await DBImportService._sqlserver_connect(self.config)
         elif self.db_type in DBImportService._postgresql_type_aliases():
             self._conn = await DBImportService._postgresql_connect(self.config)
         else:
