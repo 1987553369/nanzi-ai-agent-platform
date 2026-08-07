@@ -13,7 +13,7 @@
 | 企业 SSO | 配置的登录校验接口和固定用户目录接口 | `SSO_API_URL`、Token 和配置 | 登录身份/断言 | 已固定解析、强制 TLS、禁止代理/重定向并 Fail-closed；继续建设响应签名、防重放和审计 |
 | External SQL HTTP 网关 | `external_sql_api_url` | 系统 URL 和 `X-API-Key` | 只读 SQL、数据源和查询结果 | 已固定解析；私网要求专属精确 Host + CIDR 并绑定 Origin；继续限制响应字节、幂等重试和审计 |
 | 业务数据库 | MySQL/PostgreSQL/Oracle/ClickHouse/SQL Server | 加密的 `meta_db_connection_configs` | SQL、元数据、样本和结果 | 网络白名单、只读账号、查询预算、脱敏、连接池和凭据轮换 |
-| 通知/Webhook | 渠道特定 HTTP 接口 | 用户/系统通知配置 | 任务、报表内容和身份 | HTTP Webhook 已固定解析；继续建设域名审批、SMTP 安全、数据分类、重试幂等和投递回执 |
+| 通知/Webhook | 渠道特定 HTTP/SMTP 接口 | 用户/系统通知配置 | 任务、报表内容和身份 | HTTP 与 SMTP 均已固定解析；SMTP 私网要求专属 Host + CIDR、端口审批和强制 TLS；继续建设目标域名审批、数据分类、重试幂等和投递回执 |
 | 搜索/公开网页 | Bing、Baidu 或 URL Fetch | 工具配置 | 用户问题和网页 URL | 静态抓取已逐跳固定解析；动态浏览器任意 URL 已关闭，待隔离 Worker/egress 后恢复；继续限制内容大小/类型和 Prompt Injection |
 
 ## 统一出网策略

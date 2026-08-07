@@ -45,8 +45,9 @@ MCP：登记 SSE URL/认证 -> 验证/同步工具 -> 绑定资源 -> JSON-RPC �
 ## 必须建立的控制
 
 1. MCP、用户 HTTP 工具、Generic API、模型发现/Embedding、公开网页抓取、HTTP Webhook、
-   SSO、RAGFlow、OpenClaw 和 External SQL HTTP 网关已完成固定解析；私网集成要求精确 Host
-   与最小 CIDR 双重审批。生产继续覆盖数据库原生协议、AgentScope SDK、SMTP，并增加
+   SSO、RAGFlow、OpenClaw、External SQL HTTP 网关和 SMTP 已完成固定解析；私网集成要求
+   精确 Host 与最小 CIDR 双重审批，SMTP 同时要求端口审批和强制 TLS。生产继续覆盖数据库
+   原生协议、AgentScope SDK，并增加
    egress proxy/NetworkPolicy。
 2. 文件安全：MIME 检测、压缩包大小/文件数/深度限制、Canonical Path、恶意文件扫描，默认禁止可执行内容。
 3. Prompt Injection 防护：明确标记外部内容为不可信数据，工具权限由独立策略决定，不能被文档指令改变。

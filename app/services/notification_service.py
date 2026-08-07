@@ -5,8 +5,6 @@ import hmac
 import hashlib
 import base64
 import urllib.parse
-import smtplib
-import asyncio
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.utils import formataddr
@@ -16,6 +14,7 @@ from sqlalchemy import select
 
 from app.models.user_notification_config import UserNotificationConfig
 from app.utils.outbound_url_policy import create_ssrf_safe_async_client
+from app.utils.smtp_policy import send_smtp_message
 
 logger = logging.getLogger(__name__)
 
@@ -210,50 +209,21 @@ class NotificationService:
     @classmethod
     async def _test_email(cls, config: Dict[str, Any]) -> Tuple[bool, str]:
         smtp_host = config.get("smtp_host")
-        smtp_port = config.get("smtp_port") or 465
         smtp_user = config.get("smtp_user")
         smtp_password = config.get("smtp_password")
-        sender_name = config.get("sender_name") or "AI Agent"
-        
         if not smtp_host or not smtp_user or not smtp_password:
             return False, "SMTP 服务地址、账号和授权码不能为空"
-            
-        try:
-            smtp_port = int(smtp_port)
-        except:
-            return False, "SMTP 端口格式错误"
-
-        def send_sync():
-            try:
-                msg = MIMEMultipart()
-                msg['From'] = formataddr((sender_name, smtp_user))
-                msg['To'] = smtp_user
-                msg['Subject'] = "AI 智能体平台 - 邮件通知连通性测试"
-                
-                content = "这是一封来自AI 智能体平台的测试邮件，表明您的邮件通知通道配置已测试成功。"
-                msg.attach(MIMEText(content, 'plain', 'utf-8'))
-
-                if smtp_port == 465:
-                    server = smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=10.0)
-                else:
-                    server = smtplib.SMTP(smtp_host, smtp_port, timeout=10.0)
-                    try:
-                        server.starttls()
-                    except:
-                        pass
-
-                server.login(smtp_user, smtp_password)
-                server.sendmail(smtp_user, [smtp_user], msg.as_string())
-                server.quit()
-                return True, ""
-            except Exception as e:
-                logger.error(f"Test SMTP Connection Error: {e}", exc_info=True)
-                return False, str(e)
 
         try:
-            return await asyncio.to_thread(send_sync)
+            return await cls._send_email_msg_real(
+                config,
+                smtp_user,
+                "AI 智能体平台 - 邮件通知连通性测试",
+                "这是一封来自AI 智能体平台的测试邮件，表明您的邮件通知通道配置已测试成功。",
+            )
         except Exception as e:
-            return False, str(e)
+            logger.error("SMTP connectivity test failed: %s", e, exc_info=True)
+            return False, "SMTP 连接或发送失败，请检查配置和网络策略"
 
     # Core message sending APIs for user configured channels
     @classmethod
@@ -329,32 +299,69 @@ class NotificationService:
 
     @classmethod
     async def send_email(cls, db: AsyncSession, user_id: int, title: str, content: str) -> Tuple[bool, str]:
+        return await cls.send_email_to(db, user_id, None, title, content)
+
+    @classmethod
+    async def send_email_to(
+        cls,
+        db: AsyncSession,
+        user_id: int,
+        to_email: Optional[str],
+        title: str,
+        content: str,
+    ) -> Tuple[bool, str]:
         record = await cls.get_config_by_type_raw(db, user_id, "email")
         if not record or not record.config_json:
             return False, "用户未配置邮件通知"
         config = json.loads(record.config_json)
         if not config.get("is_enabled"):
             return False, "用户未启用邮件通知"
-
-        def send_sync():
-            host, port = config.get("smtp_host"), int(config.get("smtp_port") or 465)
-            username, password = config.get("smtp_user"), config.get("smtp_password")
-            if not host or not username or not password:
-                raise ValueError("SMTP 配置不完整")
-            message = MIMEMultipart()
-            message["From"] = formataddr((config.get("sender_name") or "AI Agent", username))
-            message["To"] = username
-            message["Subject"] = title
-            message.attach(MIMEText(content, "plain", "utf-8"))
-            server = smtplib.SMTP_SSL(host, port, timeout=10.0) if port == 465 else smtplib.SMTP(host, port, timeout=10.0)
-            if port != 465:
-                server.starttls()
-            server.login(username, password)
-            server.sendmail(username, [username], message.as_string())
-            server.quit()
-
+        recipient = str(to_email or config.get("smtp_user") or "").strip()
         try:
-            await asyncio.to_thread(send_sync)
-            return True, ""
+            return await cls._send_email_msg_real(config, recipient, title, content)
         except Exception as exc:
-            return False, str(exc)
+            logger.error("SMTP send failed: %s", exc, exc_info=True)
+            return False, "邮件发送失败，请检查 SMTP 配置和网络策略"
+
+    @classmethod
+    async def _send_email_msg_real(
+        cls,
+        config: Dict[str, Any],
+        to_email: str,
+        title: str,
+        content: str,
+    ) -> Tuple[bool, str]:
+        host = str(config.get("smtp_host") or "").strip()
+        username = str(config.get("smtp_user") or "").strip()
+        password = str(config.get("smtp_password") or "")
+        recipient = str(to_email or "").strip()
+        subject = str(title or "")
+        body = str(content or "")
+        sender_name = str(config.get("sender_name") or "AI Agent")
+        if not host or not username or not password or not recipient:
+            return False, "SMTP 配置或收件人不完整"
+        if any(
+            "\r" in value or "\n" in value
+            for value in (username, recipient, subject, sender_name)
+        ):
+            return False, "邮件地址或主题格式无效"
+        try:
+            port = int(config.get("smtp_port") or 465)
+        except (TypeError, ValueError):
+            return False, "SMTP 端口格式错误"
+
+        message = MIMEMultipart()
+        message["From"] = formataddr((sender_name, username))
+        message["To"] = recipient
+        message["Subject"] = subject
+        message.attach(MIMEText(body, "plain", "utf-8"))
+        await send_smtp_message(
+            hostname=host,
+            port=port,
+            username=username,
+            password=password,
+            recipient=recipient,
+            message=message.as_string(),
+            timeout=10.0,
+        )
+        return True, ""

@@ -83,6 +83,24 @@ def test_private_outbound_approval_accepts_scoped_rfc1918_network():
     settings.validate_runtime_configuration()
 
 
+def test_smtp_private_approval_requires_exact_host_and_cidr():
+    settings = _build_settings(
+        SMTP_ALLOWED_PRIVATE_HOSTS=["smtp.internal"],
+        SMTP_ALLOWED_PRIVATE_CIDRS=[],
+    )
+
+    with pytest.raises(ValueError, match="SMTP.*同时配置"):
+        settings.validate_runtime_configuration()
+
+
+@pytest.mark.parametrize("ports", [[], [0], [65536]])
+def test_smtp_allowed_ports_must_be_nonempty_valid_tcp_ports(ports):
+    settings = _build_settings(SMTP_ALLOWED_PORTS=ports)
+
+    with pytest.raises(ValueError, match="SMTP 端口审批配置无效"):
+        settings.validate_runtime_configuration()
+
+
 @pytest.mark.parametrize(
     ("overrides", "message"),
     [

@@ -7,7 +7,7 @@
 | `API_SERVICE_ENV` | `str` | `'dev'` | `app/core/config.py:8` |
 | `API_SERVICE_PORT` | `int` | `8001` | `app/core/config.py:9` |
 | `LOG_LEVEL` | `str` | `'INFO'` | `app/core/config.py:10` |
-| `ALLOWED_ORIGINS` | `List[str]` | `['*']` | `app/core/config.py:11` |
+| `ALLOWED_ORIGINS` | `List[str]` | `[]` | `app/core/config.py:12` |
 | `APP_PUBLIC_URL` | `Optional[str]` | `None` | `app/core/config.py:12` |
 | `DATABASE_TYPE` | `str` | `'mysql'` | `app/core/config.py:15` |
 | `MYSQL_HOST` | `Optional[str]` | `None` | `app/core/config.py:18` |
@@ -44,13 +44,16 @@
 | `RAGFLOW_ALLOWED_PRIVATE_CIDRS` | `List[str]` | `[]` | `app/core/config.py:69` |
 | `OPENCLAW_ALLOWED_PRIVATE_HOSTS` | `List[str]` | `[]` | `app/core/config.py:70` |
 | `OPENCLAW_ALLOWED_PRIVATE_CIDRS` | `List[str]` | `[]` | `app/core/config.py:71` |
-| `MEMORY_BASE_HALF_LIFE` | `float` | `7.0` | `app/core/config.py:74` |
-| `MEMORY_CONSOLIDATION_THRESHOLD` | `float` | `0.82` | `app/core/config.py:75` |
-| `SSO_API_URL` | `str` | `'https://yovole.net/api/v1/user/check/login'` | `app/core/config.py:78` |
-| `SSO_ACCESS_TOKEN` | `str` | `'CHANGE_ME_SSO_ACCESS_TOKEN'` | `app/core/config.py:80` |
-| `SSO_REQUEST_SYSTEM` | `str` | `'NANZI_AI_AGENT_PLATFORM'` | `app/core/config.py:81` |
-| `SSO_REQUEST_BUSINESS` | `str` | `'USER-LOGIN'` | `app/core/config.py:82` |
-| `SSO_TIMEOUT` | `int` | `30` | `app/core/config.py:83` |
+| `SMTP_ALLOWED_PRIVATE_HOSTS` | `List[str]` | `[]` | `app/core/config.py:74` |
+| `SMTP_ALLOWED_PRIVATE_CIDRS` | `List[str]` | `[]` | `app/core/config.py:75` |
+| `SMTP_ALLOWED_PORTS` | `List[int]` | `[465, 587]` | `app/core/config.py:76` |
+| `MEMORY_BASE_HALF_LIFE` | `float` | `7.0` | `app/core/config.py:79` |
+| `MEMORY_CONSOLIDATION_THRESHOLD` | `float` | `0.82` | `app/core/config.py:80` |
+| `SSO_API_URL` | `str` | `'https://yovole.net/api/v1/user/check/login'` | `app/core/config.py:83` |
+| `SSO_ACCESS_TOKEN` | `str` | `'CHANGE_ME_SSO_ACCESS_TOKEN'` | `app/core/config.py:85` |
+| `SSO_REQUEST_SYSTEM` | `str` | `'NANZI_AI_AGENT_PLATFORM'` | `app/core/config.py:86` |
+| `SSO_REQUEST_BUSINESS` | `str` | `'USER-LOGIN'` | `app/core/config.py:87` |
+| `SSO_TIMEOUT` | `int` | `30` | `app/core/config.py:88` |
 
 ## 数据库存储的系统配置
 

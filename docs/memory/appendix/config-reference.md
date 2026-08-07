@@ -15,6 +15,7 @@
 | SSO | `SSO_*`、`yovole_sso_enabled` | 禁止公开默认 Token，响应防重放，异常 Fail-closed |
 | OpenClaw | `openclaw_*`、`OPENCLAW_ALLOWED_PRIVATE_HOSTS/CIDRS` | 私网精确 Host + CIDR，认证上下文签名并绑定 Audience |
 | SQL | `sql_execution_mode`、外部 SQL 配置、`EXTERNAL_SQL_ALLOWED_PRIVATE_HOSTS/CIDRS` | HTTP 网关私网精确 Host + CIDR；数据库账号默认只读，生产拒绝不安全开发模式 |
+| SMTP | 用户邮件配置、`SMTP_ALLOWED_PRIVATE_HOSTS/CIDRS`、`SMTP_ALLOWED_PORTS` | 私网精确 Host + CIDR；端口按部署白名单；465 隐式 TLS，其他批准端口强制 STARTTLS；连通性错误不回显内部地址 |
 | Agent 运行 | `agent_*`、`sub_agent_*` | 限制迭代、上下文、锁 TTL、超时和输出；变更需审计和版本化 |
 | Skills | `skill_auto_*`、Workspace Root | 文件字节/数量限制、Canonical 隔离路径和不可变发布包 |
 | 审计 | `audit_log_retention_days` | 根据法律和安全要求确定保留期，并验证容量和删除结果 |

@@ -70,6 +70,11 @@ class Settings(BaseSettings):
     OPENCLAW_ALLOWED_PRIVATE_HOSTS: List[str] = []
     OPENCLAW_ALLOWED_PRIVATE_CIDRS: List[str] = []
 
+    # SMTP egress: private targets require exact Host + CIDR approval.
+    SMTP_ALLOWED_PRIVATE_HOSTS: List[str] = []
+    SMTP_ALLOWED_PRIVATE_CIDRS: List[str] = []
+    SMTP_ALLOWED_PORTS: List[int] = [465, 587]
+
     # Ebbinghaus Memory Configs
     MEMORY_BASE_HALF_LIFE: float = 7.0
     MEMORY_CONSOLIDATION_THRESHOLD: float = 0.82
@@ -85,6 +90,7 @@ class Settings(BaseSettings):
     def validate_runtime_configuration(self) -> None:
         """Reject unusable placeholder secrets before a production process serves traffic."""
         from app.utils.outbound_url_policy import create_private_network_access_policy
+        from app.utils.smtp_policy import validate_smtp_allowed_ports
 
         private_network_configs = {
             "RAGFLOW": (
@@ -99,6 +105,10 @@ class Settings(BaseSettings):
                 self.EXTERNAL_SQL_ALLOWED_PRIVATE_HOSTS,
                 self.EXTERNAL_SQL_ALLOWED_PRIVATE_CIDRS,
             ),
+            "SMTP": (
+                self.SMTP_ALLOWED_PRIVATE_HOSTS,
+                self.SMTP_ALLOWED_PRIVATE_CIDRS,
+            ),
         }
         private_network_errors = []
         for integration, (allowed_hosts, allowed_cidrs) in private_network_configs.items():
@@ -110,6 +120,10 @@ class Settings(BaseSettings):
             raise ValueError(
                 "私网出网审批配置无效: " + ", ".join(private_network_errors)
             )
+        try:
+            validate_smtp_allowed_ports(self.SMTP_ALLOWED_PORTS)
+        except ValueError as exc:
+            raise ValueError(f"SMTP 端口审批配置无效: {exc}") from exc
 
         if self.API_SERVICE_ENV.strip().lower() not in {"prod", "production"}:
             return
