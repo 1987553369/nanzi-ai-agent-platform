@@ -2,7 +2,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.dialects import postgresql
 
-from app.api.portal.endpoints.chatbi_examples import _chatbi_example_user_join
+from app.api.portal.endpoints.examples import _chatbi_example_user_join
 from app.models.chatbi_example import ChatBIExample
 from app.models.user import User
 

@@ -1,9 +1,12 @@
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-import asyncio
-from unittest.mock import AsyncMock, patch, MagicMock
+
 from app.services.ai.agent_service import AgentService
 from app.schemas.agent import ChatConfig
-from app.schemas.trace import AgentExecutionStep
+
+
+pytestmark = pytest.mark.no_infrastructure
 
 @pytest.mark.asyncio
 async def test_ltm_applied_in_stream_meta():
