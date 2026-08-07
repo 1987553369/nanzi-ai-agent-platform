@@ -35,6 +35,7 @@ def main() -> int:
 
     required_fragments = (
         "python_quality_gate.py",
+        "annotate_pytest_junit.py",
         "compileall",
         "-m no_infrastructure",
         "npm ci",

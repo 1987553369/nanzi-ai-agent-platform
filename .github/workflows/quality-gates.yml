@@ -73,6 +73,10 @@ jobs:
             --ignore=tests/frontend \
             --junitxml=reports/backend-junit.xml
 
+      - name: Annotate backend test failures
+        if: always()
+        run: python scripts/ci/annotate_pytest_junit.py reports/backend-junit.xml
+
       - name: Capture current mypy debt
         continue-on-error: true
         run: |

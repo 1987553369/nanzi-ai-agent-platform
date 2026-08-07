@@ -1,4 +1,6 @@
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -70,6 +72,7 @@ def test_passing_quality_gates_are_hard_failures_and_debt_is_explicit():
         "Run infrastructure-free backend tests",
     ):
         assert "continue-on-error" not in backend_steps[name]
+    assert backend_steps["Annotate backend test failures"]["if"] == "always()"
     assert backend_steps["Capture current mypy debt"]["continue-on-error"] is True
     assert "continue-on-error" not in frontend_steps["Run strict type check and production build"]
     assert "Pillow==11.3.0" in frontend_steps["Run frontend contract tests"]["run"]
@@ -150,3 +153,29 @@ def test_dependabot_tracks_every_ci_dependency_ecosystem():
     ecosystems = {item["package-ecosystem"] for item in config["updates"]}
 
     assert ecosystems == {"github-actions", "pip", "npm", "docker"}
+
+
+def test_junit_collection_errors_are_emitted_as_github_annotations(tmp_path):
+    report = tmp_path / "junit.xml"
+    report.write_text(
+        """<?xml version="1.0" encoding="utf-8"?>
+<testsuites><testsuite errors="1"><testcase name="tests/test_example.py">
+<error message="collection failure">ImportError: missing module</error>
+</testcase></testsuite></testsuites>
+""",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "scripts/ci/annotate_pytest_junit.py"),
+            str(report),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert "::error file=tests/test_example.py,title=Pytest failure::" in result.stdout
+    assert "ImportError: missing module" in result.stdout
