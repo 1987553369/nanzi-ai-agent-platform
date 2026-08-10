@@ -62,7 +62,10 @@ async def test_pool_manager_routes_postgresql():
         "_create_postgresql_pool",
         new_callable=AsyncMock,
         return_value=mock_pool,
-    ) as create_pool:
+    ) as create_pool, patch(
+        "app.services.db_connection_service.DbConnectionService.get_runtime_password",
+        return_value="secret",
+    ):
         result = await DataSourcePoolManager.get_pool(11)
 
     assert result is mock_pool

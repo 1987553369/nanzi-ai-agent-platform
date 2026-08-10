@@ -85,6 +85,14 @@ def _disable_agent_db_sessions():
             "app.services.ai.skills_stats_service.skills_stats_service.record_activations",
             AsyncMock(),
         ),
+        patch(
+            "app.services.ai.config.ConfigService.get_all_from_db",
+            AsyncMock(return_value={}),
+        ),
+        patch(
+            "app.services.ai.config._lookup_registered_model",
+            AsyncMock(return_value=None),
+        ),
     ):
         yield
 

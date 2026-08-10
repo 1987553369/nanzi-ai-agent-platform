@@ -217,6 +217,10 @@ async def test_sqlserver_adapter():
         assert tables[1] == {"name": "dbo_user_view", "comment": "", "type": "VIEW"}
         assert "INFORMATION_SCHEMA.TABLES" in mock_cursor.execute.call_args[0][0]
 
+        mock_cursor.fetchall.return_value = [
+            ("id", "String", ""),
+            ("name", "String", ""),
+        ]
         mock_cursor.description = [("id", str), ("name", str)]
         cols = await adapter.get_columns(table_name="dbo_users")
         assert len(cols) == 2
