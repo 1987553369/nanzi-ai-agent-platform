@@ -180,7 +180,7 @@ async def test_consolidate_user_memories_clustering_and_merging():
         new_callable=AsyncMock,
         return_value=redis
     ), patch(
-        "app.services.ai.memory_index_service.get_llm_async",
+        "app.core.llm.client.get_llm_async",
         new_callable=AsyncMock,
         return_value=AsyncMock()
     ), patch(

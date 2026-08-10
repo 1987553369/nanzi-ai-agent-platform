@@ -102,6 +102,10 @@ async def test_search_summaries_uses_redis_knn_when_query_embedding_exists():
         "app.services.ai.memory_index_service.get_redis_binary",
         new_callable=AsyncMock,
         return_value=binary_redis,
+    ), patch(
+        "app.services.memory_config_service.MemoryConfigService.get_float",
+        new_callable=AsyncMock,
+        return_value=7.0,
     ):
         items = await MemoryIndexService.search_summaries(
             "9", query="Redis", query_embedding=[1.0, 0.0, 0.0, 0.0], limit=3

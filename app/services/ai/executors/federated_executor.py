@@ -978,9 +978,22 @@ class FederatedQueryExecutor:
                                 "columns": columns,
                                 "items": final_data["items"],
                             }
-                            duration_anomaly, duration_reason = (
-                                self.agent_runner._detect_duration_anomaly(parsed_join)
-                            )
+                            duration_anomaly = False
+                            duration_reason = ""
+                            try:
+                                anomaly_result = self.agent_runner._detect_duration_anomaly(
+                                    parsed_join
+                                )
+                                if (
+                                    isinstance(anomaly_result, tuple)
+                                    and len(anomaly_result) == 2
+                                ):
+                                    duration_anomaly, duration_reason = anomaly_result
+                            except Exception as anomaly_exc:
+                                logger.warning(
+                                    "[FederatedQueryExecutor] Duration anomaly check failed: %s",
+                                    anomaly_exc,
+                                )
                             if duration_anomaly:
                                 # Soft tip only：不抛错硬拦截联邦结果。
                                 join_details = (

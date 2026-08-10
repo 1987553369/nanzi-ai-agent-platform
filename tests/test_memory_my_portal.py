@@ -103,7 +103,13 @@ async def test_delete_my_summary():
         )
 
     assert res["status"] == "success"
-    mock_delete.assert_awaited_once_with("7", "conv-123", include_summary=True)
+    mock_delete.assert_awaited_once_with(
+        "7",
+        "conv-123",
+        include_summary=True,
+        user_name="user_7",
+        user_info={"user_id": 7, "user_name": "user_7"},
+    )
 
 
 @pytest.mark.asyncio

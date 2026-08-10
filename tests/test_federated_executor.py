@@ -1474,7 +1474,16 @@ async def test_federated_executor_repairs_subquery_time_range_mismatch_before_ex
          patch("app.services.metadata_service.MetadataService.get_dataset_by_name", side_effect=mock_get_dataset_by_name), \
          patch("app.services.ai.runtime.agentscope.trace_context.TraceSpanContext", FakeTraceSpanContext), \
          patch("app.services.ai.executors.federated_executor.execute_sql_query_core", execute_mock), \
+         patch(
+             "app.services.ai.executors.federated_executor.validate_federated_subquery_before_execute",
+             new_callable=AsyncMock,
+         ) as mock_preflight, \
          patch("app.services.ai.executors.federated_executor.detect_time_range_mismatch") as mock_detect:
+        async def fixed_time_preflight(*args, sub_sql, user_question, **kwargs):
+            risk = detect_time_range_mismatch(user_question, sub_sql, now=fixed_now)
+            return f"时间范围不匹配: {risk}" if risk else None
+
+        mock_preflight.side_effect = fixed_time_preflight
         mock_detect.side_effect = lambda q, sql, **kwargs: detect_time_range_mismatch(
             q, sql, now=fixed_now
         )
