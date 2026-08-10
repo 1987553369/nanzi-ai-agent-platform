@@ -213,8 +213,8 @@ async def test_sqlserver_adapter():
     with patch("app.services.pool_manager.DataSourcePoolManager.get_pool", return_value=mock_pool):
         tables = await adapter.get_tables()
         assert len(tables) == 2
-        assert tables[0] == {"name": "dbo_users", "type": "TABLE"}
-        assert tables[1] == {"name": "dbo_user_view", "type": "VIEW"}
+        assert tables[0] == {"name": "dbo_users", "comment": "", "type": "BASE TABLE"}
+        assert tables[1] == {"name": "dbo_user_view", "comment": "", "type": "VIEW"}
         assert "INFORMATION_SCHEMA.TABLES" in mock_cursor.execute.call_args[0][0]
 
         mock_cursor.description = [("id", str), ("name", str)]

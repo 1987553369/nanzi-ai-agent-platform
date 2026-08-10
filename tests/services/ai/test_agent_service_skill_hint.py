@@ -81,6 +81,7 @@ def _disable_agent_db_sessions():
     with (
         patch("app.services.ai.agent_service.AsyncSessionLocal", return_value=_SessionContext()),
         patch("app.core.orm.AsyncSessionLocal", return_value=_SessionContext()),
+        patch("app.services.ai.skill_resolver.is_main_general_agent", return_value=False),
     ):
         yield
 
