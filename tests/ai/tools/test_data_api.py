@@ -123,8 +123,9 @@ async def test_call_ragflow_api_success():
 async def test_get_dataset_schema_tool():
     """local 模式优先走本地向量检索，而不是返回全量授权 YAML。"""
     session = MagicMock()
-    session.execute = AsyncMock()
-    session.execute.return_value.scalars.return_value.all.return_value = []
+    execute_result = MagicMock()
+    execute_result.scalars.return_value.all.return_value = []
+    session.execute = AsyncMock(return_value=execute_result)
     mock_ds = MagicMock()
     mock_ds.id = 1
     mock_ds.display_name = "User Stats"
@@ -176,8 +177,9 @@ async def test_get_dataset_schema_tool():
 async def test_get_dataset_schema_tool_local_falls_back_to_mysql_like_when_vector_fails():
     """local 向量检索异常时，降级为 MySQL LIKE 命中数据集后导出 YAML。"""
     session = MagicMock()
-    session.execute = AsyncMock()
-    session.execute.return_value.scalars.return_value.all.return_value = []
+    execute_result = MagicMock()
+    execute_result.scalars.return_value.all.return_value = []
+    session.execute = AsyncMock(return_value=execute_result)
     authorized_ds = MagicMock()
     authorized_ds.id = 1
     authorized_ds.display_name = "User Stats"

@@ -180,6 +180,10 @@ async def test_direct_sql_dataset_inference_rejects_when_row_filter_required(mon
     )
     monkeypatch.setattr(chatbi, "resolve_table_bindings_from_db", fake_resolve_table_bindings_from_db)
     monkeypatch.setattr(chatbi.MetadataService, "get_dataset_by_name", fake_get_dataset_by_name)
+    monkeypatch.setattr(
+        "app.services.ai.chatbi_sql_query_binding._fetch_table_binding_candidates_from_db",
+        AsyncMock(return_value={}),
+    )
 
     with pytest.raises(HTTPException) as exc_info:
         await chatbi._resolve_direct_sql_dataset_name(

@@ -233,7 +233,7 @@ async def test_chat_rejects_privileged_execution_controls_without_capability(
         app.dependency_overrides.pop(get_db_session, None)
 
     assert response.status_code == 403
-    assert capability in response.json()["detail"]
+    assert capability in response.json()["message"]
 
 @pytest.mark.asyncio
 async def test_chat_auth_required(db_session):
