@@ -15,7 +15,7 @@ RUN if [ "$PREBUILD_FRONTEND" = "1" ]; then \
       test -f dist/index.html || (echo "ERROR: PREBUILD_FRONTEND=1 但未找到 frontend/dist/index.html，请先在宿主机执行前端构建" && exit 1); \
       echo "使用宿主机预构建的前端产物"; \
     else \
-      NODE_OPTIONS="--max-old-space-size=2048" VITE_APP_VERSION="$APP_VERSION" npx vite build; \
+      NODE_OPTIONS="--max-old-space-size=4096" VITE_APP_VERSION="$APP_VERSION" npx vite build; \
     fi
 
 # --- 阶段 2: Python 环境构建 ---

@@ -147,6 +147,7 @@ def test_docker_build_is_deterministic_and_excludes_dev_dependencies():
     assert "npm ci || npm install" not in dockerfile + build_helper
     assert "npm ci;" in dockerfile
     assert "npm ci" in build_helper
+    assert 'NODE_OPTIONS="--max-old-space-size=4096"' in dockerfile
     assert "pip install --upgrade pip==25.1.1" in dockerfile
     assert "requirements-dev.txt" not in dockerfile
 

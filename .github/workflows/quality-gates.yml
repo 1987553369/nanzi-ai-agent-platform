@@ -227,6 +227,7 @@ jobs:
         run: mkdir -p reports
 
       - name: Scan image and write SARIF evidence
+        id: trivy-scan
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: nanzi-ai-agent:ci-${{ github.sha }}
@@ -237,7 +238,7 @@ jobs:
           exit-code: "0"
 
       - name: Upload container report
-        if: always()
+        if: always() && steps.trivy-scan.outcome != 'skipped'
         uses: actions/upload-artifact@v4.6.2
         with:
           name: container-security-report
