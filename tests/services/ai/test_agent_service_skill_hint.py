@@ -69,6 +69,19 @@ def _disable_quota_block_message():
         yield
 
 
+@pytest.fixture(autouse=True)
+def _disable_agent_db_sessions():
+    class _SessionContext:
+        async def __aenter__(self):
+            return AsyncMock()
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    with patch("app.services.ai.agent_service.AsyncSessionLocal", return_value=_SessionContext()):
+        yield
+
+
 @pytest.mark.asyncio
 @pytest.mark.no_infrastructure
 async def test_inject_skills_preloads_full_instruction_for_mounted_skill(tmp_path):

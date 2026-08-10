@@ -32,16 +32,16 @@ def _build_app() -> FastAPI:
 
 
 def test_personal_publication_submit_route_exists():
-    routes = {route.path for route in _build_app().routes if hasattr(route, "path")}
-    assert "/api/portal/skills/personal/{skill_id}/publication-requests" in routes
-    assert "/api/portal/skills/personal/{skill_id}/publication-requests/withdraw" in routes
+    routes = {route.path for route in personal_skills.router.routes if hasattr(route, "path")}
+    assert "/{skill_id}/publication-requests" in routes
+    assert "/{skill_id}/publication-requests/withdraw" in routes
 
 
 def test_admin_publication_review_routes_exist():
-    routes = {route.path for route in _build_app().routes if hasattr(route, "path")}
-    assert "/api/portal/skills/publication-requests" in routes
-    assert "/api/portal/skills/publication-requests/{version_id}/approve" in routes
-    assert "/api/portal/skills/publication-requests/{version_id}/reject" in routes
+    routes = {route.path for route in skills.router.routes if hasattr(route, "path")}
+    assert "/publication-requests" in routes
+    assert "/publication-requests/{version_id}/approve" in routes
+    assert "/publication-requests/{version_id}/reject" in routes
 
 
 def test_personal_submit_returns_publication_summary(monkeypatch):
