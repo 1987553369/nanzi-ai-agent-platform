@@ -28,6 +28,10 @@ def mock_search_datasets_globally(monkeypatch):
         "app.services.ai.executors.federated_executor.load_column_term_map_for_datasets",
         fake_load_column_term_map
     )
+    monkeypatch.setattr(
+        "app.services.ai.executors.federated_executor.validate_federated_subquery_before_execute",
+        AsyncMock(return_value=None),
+    )
 
 
 
