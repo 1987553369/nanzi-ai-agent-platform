@@ -13,7 +13,7 @@ async def test_example_index_ensure_index():
     mock_redis.execute_command = AsyncMock(side_effect=Exception("Index does not exist"))
     
     with patch("app.services.ai.example_index_service.get_redis", return_value=mock_redis), \
-         patch("app.services.ai.example_index_service.EmbeddingClient.get_dimensions", return_value=1536):
+         patch("app.services.ai.example_index_service.EmbeddingClient.get_dimensions", new_callable=AsyncMock, return_value=1536):
         
         res = await ExampleIndexService.ensure_index()
         assert res is True

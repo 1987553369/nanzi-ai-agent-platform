@@ -193,7 +193,10 @@ async def test_oracle_adapter():
 async def test_sqlserver_adapter():
     adapter = SQLServerAdapter(source_id=4)
 
-    mock_rows = [("dbo_users", "BASE TABLE"), ("dbo_user_view", "VIEW")]
+    mock_rows = [
+        ("dbo_users", "", "BASE TABLE"),
+        ("dbo_user_view", "", "VIEW"),
+    ]
     mock_cursor = AsyncMock()
     mock_cursor.fetchall.return_value = mock_rows
 
