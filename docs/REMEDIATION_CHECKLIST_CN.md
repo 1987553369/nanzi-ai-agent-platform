@@ -30,7 +30,7 @@
 | [~] | AUTH-P1-04 | Trace、Agent Active Config、上传文件统一对象授权 | Portal Trace/Span 和 Agent 活跃配置已校验所有者/执行权限；上传路径已按用户隔离，仍需浏览器跨用户负向集成测试 |
 | [x] | AI-P1-01 | Prompt Override、Raw Prompt、工具自动批准改为服务端特权 Capability | 普通请求无法弱化运行策略 |
 | [~] | ENG-P1-01 | 固定 Python/Node 依赖，拆分 Runtime/Dev/Optional Lock | Node 已有 lock；Python Runtime/Dev 已拆分，开发工具精确固定；Docker 基础镜像固定补丁版本并禁止 `npm install` 回退；仍需生成完整 Python hash lock、固定镜像 Digest 和拆 Optional 依赖 |
-| [~] | ENG-P1-02 | 建立 CI：Lint、类型、单测、集成、前端构建、SAST、Secret/依赖/镜像扫描 | 已新增四类 GitHub Actions job、增量 Ruff/SAST 硬门禁、离线测试、前端类型/构建、Secret Scan、依赖审计、双 SBOM、镜像构建/扫描和报告留存；整改分支最新远端 run 31347281603 中前端与供应链成功、容器按条件跳过，后端仍失败，剩余项为向量索引初始化、SQL Server 适配器及 AgentService 测试的基础设施耦合，暂不标记完成 |
+| [~] | ENG-P1-02 | 建立 CI：Lint、类型、单测、集成、前端构建、SAST、Secret/依赖/镜像扫描 | Quality Gates run 31360188818 已跑绿：后端编译/增量 Ruff/SAST/无基础设施测试、前端契约/类型/生产构建、Secret/依赖证据/SBOM 全部成功；容器构建与 Trivy 报告因本轮未命中容器变更条件而 skipped，待一次容器路径实际成功后标记完成 |
 | [ ] | ENG-P1-03 | 统一前端 Auth Store、API Client、SSE Transport、错误模型 | Portal/Embed/Debug 共用协议契约 |
 | [ ] | ENG-P1-04 | 路由懒加载、Bundle Budget、长列表虚拟化 | 首屏体积和性能预算通过 |
 | [ ] | DB-P1-01 | 统一事务 Unit of Work，减少 Service 内部分散 Commit | 部分失败可完整回滚 |
@@ -120,3 +120,4 @@
 | 2026-08-07 | ENG-E（CI 与供应链基线） | 新增 `Quality Gates`：后端全量编译、增量 Ruff/SAST、无基础设施测试、前端契约/类型/生产构建、Gitleaks、Pip/NPM 审计、CycloneDX 双 SBOM、Docker Buildx 和 Trivy SARIF；硬门禁与存量债务报告分离；所有 Action 使用精确版本并由 Dependabot 覆盖；Runtime/Dev Python 依赖拆分，Docker 固定 Node/Python 补丁版本并移除 `npm ci || npm install` 回退 |
 | 2026-08-07 | ENG-E 验证 | 离线 core/迁移回归 252 项、前端契约 320 项和 CI 专项 9 项通过；CI 配置自检、增量 Ruff/SAST、Python 全量编译、前端生产构建和 CycloneDX SBOM 本地通过。远端 GitHub Actions、完整 Python 3.11 干净依赖安装、镜像构建及扫描尚未运行，因此 ENG-P1-01/02 保持进行中 |
 | 2026-08-10 | 整改分支回归 | codex/remediation-hardening 已连续推送测试契约修复（b64af4f、3563c3f、2cc4816、ff6ae2e）；本地 Python 3.11 编译、git diff --check、增量 Ruff/SAST 通过。远端 Quality Gates 前端与供应链成功，容器 job skipped；后端剩余失败已收敛到既有向量索引/SQL Server 测试及 AgentService 离线测试的数据库依赖，未执行真实数据库、迁移或部署。 |
+| 2026-08-10 | ENG-E 远端跑绿 | 整改分支提交 0660f6b 触发的 Quality Gates run 31360188818 完成且 workflow conclusion 为 success；后端、前端、供应链三个 job 均 success，容器 job 因路径条件 skipped。后端离线测试已清除运行时模型、数据库、记忆、联邦执行器及适配器 fixture 的基础设施耦合；未连接真实数据库、执行迁移或部署。 |
