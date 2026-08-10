@@ -46,6 +46,9 @@ def test_quality_workflow_covers_backend_frontend_supply_chain_and_container():
     assert jobs["frontend-quality"]["timeout-minutes"] == 25
     assert jobs["supply-chain"]["timeout-minutes"] == 25
     assert jobs["container-security"]["timeout-minutes"] == 60
+    assert "startsWith(github.ref, 'refs/heads/codex/')" in str(
+        jobs["container-security"]["if"]
+    )
 
 
 def test_all_actions_use_exact_versions_or_full_commit_shas():

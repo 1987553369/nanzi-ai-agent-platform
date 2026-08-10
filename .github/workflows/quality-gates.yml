@@ -199,7 +199,10 @@ jobs:
 
   container-security:
     name: Container build and vulnerability report
-    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    if: >-
+      github.event_name == 'pull_request' ||
+      github.ref == 'refs/heads/main' ||
+      startsWith(github.ref, 'refs/heads/codex/')
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
