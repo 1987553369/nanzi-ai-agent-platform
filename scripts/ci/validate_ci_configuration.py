@@ -13,11 +13,27 @@ ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github/workflows/quality-gates.yml"
 ACTION_REF_RE = re.compile(r"uses:\s+[^\s@]+@([^\s#]+)")
 EXACT_ACTION_VERSION_RE = re.compile(r"^(?:v?\d+\.\d+\.\d+|[0-9a-f]{40})$")
+REQUIREMENT_NAME_RE = re.compile(r"^([A-Za-z0-9_.-]+)(?:\[.*?\])?(?:[<>=!~].*)?$")
 
 
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise ValueError(message)
+
+
+def direct_requirement_names(path: Path) -> set[str]:
+    names: set[str] = set()
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.split("#", 1)[0].strip()
+        if not line or line.startswith("-"):
+            continue
+        match = REQUIREMENT_NAME_RE.fullmatch(line)
+        if match is None:
+            raise ValueError(f"无法解析依赖声明: {path.name}: {line}")
+        normalized = match.group(1).lower().replace("_", "-")
+        require(normalized not in names, f"依赖在 {path.name} 内重复声明: {normalized}")
+        names.add(normalized)
+    return names
 
 
 def main() -> int:
@@ -63,6 +79,30 @@ def main() -> int:
     require("npm ci" in build_helper, "宿主机前端预构建必须使用 npm ci")
     require("requirements-dev.txt" not in dockerfile, "生产镜像不得安装开发依赖")
 
+    aggregate_source = (ROOT / "requirements.in").read_text(encoding="utf-8")
+    aggregate_lines = {
+        line.split("#", 1)[0].strip()
+        for line in aggregate_source.splitlines()
+        if line.split("#", 1)[0].strip()
+    }
+    require(
+        aggregate_lines == {"-r requirements-core.in", "-r requirements-optional.in"},
+        "requirements.in 必须只聚合 core 与 optional 源清单",
+    )
+    core_names = direct_requirement_names(ROOT / "requirements-core.in")
+    optional_names = direct_requirement_names(ROOT / "requirements-optional.in")
+    require(bool(core_names), "核心依赖源清单不能为空")
+    require(bool(optional_names), "可选依赖源清单不能为空")
+    require(
+        core_names.isdisjoint(optional_names),
+        f"核心与可选依赖重复声明: {sorted(core_names & optional_names)}",
+    )
+    development_source = (ROOT / "requirements-dev.in").read_text(encoding="utf-8")
+    require(
+        "-r requirements.in" in development_source.splitlines(),
+        "开发依赖源清单必须继承完整生产依赖源清单",
+    )
+
     runtime_requirements = (ROOT / "requirements.txt").read_text(encoding="utf-8")
     for dev_dependency in (
         "defusedxml",
@@ -78,7 +118,7 @@ def main() -> int:
             f"运行时依赖中仍包含开发工具: {dev_dependency}",
         )
 
-    print("CI 配置、Action 版本和构建确定性检查通过。")
+    print("CI 配置、依赖分组、Action 版本和构建确定性检查通过。")
     return 0
 
 

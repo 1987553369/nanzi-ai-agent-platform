@@ -48,6 +48,10 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
           cache-dependency-path: |
+            requirements.in
+            requirements-core.in
+            requirements-optional.in
+            requirements-dev.in
             requirements.txt
             requirements-dev.txt
 

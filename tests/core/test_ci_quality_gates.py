@@ -138,6 +138,29 @@ def test_runtime_and_development_dependencies_are_separated():
     assert development.startswith("-r requirements.txt")
 
 
+def test_python_dependency_sources_separate_core_optional_and_development_groups():
+    aggregate = (ROOT / "requirements.in").read_text(encoding="utf-8")
+    core = (ROOT / "requirements-core.in").read_text(encoding="utf-8")
+    optional = (ROOT / "requirements-optional.in").read_text(encoding="utf-8")
+    development = (ROOT / "requirements-dev.in").read_text(encoding="utf-8")
+
+    assert "-r requirements-core.in" in aggregate
+    assert "-r requirements-optional.in" in aggregate
+    assert "-r requirements.in" in development
+    for dependency in (
+        "fastapi",
+        "agentscope[service,storage,workspace]",
+        "sqlalchemy",
+    ):
+        assert re.search(rf"^{re.escape(dependency)}(?:[<=>]|$)", core, re.MULTILINE)
+        assert dependency not in optional
+    for dependency in ("oracledb", "pyodbc", "playwright", "python-docx"):
+        assert re.search(rf"^{dependency}(?:[<=>]|$)", optional, re.MULTILINE)
+        assert dependency not in core
+    for dependency in ("pytest", "mypy", "ruff"):
+        assert re.search(rf"^{dependency}==", development, re.MULTILINE)
+
+
 def test_docker_build_is_deterministic_and_excludes_dev_dependencies():
     dockerfile = (ROOT / "docker/Dockerfile").read_text(encoding="utf-8")
     build_helper = (ROOT / "docker/_build_common.sh").read_text(encoding="utf-8")

@@ -1,0 +1,12 @@
+# CI、测试、类型检查与增量质量门禁依赖。
+-r requirements.in
+
+defusedxml==0.7.1
+mypy==1.17.1
+Pillow==11.3.0
+pytest==8.4.1
+pytest-asyncio==1.1.0
+pytest-github-actions-annotate-failures==0.3.0
+pytest-mock==3.14.1
+PyYAML==6.0.2
+ruff==0.12.7

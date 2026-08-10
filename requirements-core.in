@@ -1,0 +1,24 @@
+# NanZi 核心 API、认证、Agent 与默认 MySQL 运行时依赖。
+fastapi>=0.100.0
+uvicorn[standard]>=0.20.0
+gunicorn==20.1.0
+redis>=4.5.1
+aiomysql>=0.1.1
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+python-dotenv>=1.0.0
+httpx>=0.27,<1
+cryptography>=41.0.0
+tenacity>=8.2.0
+sqlalchemy>=2.0.0
+greenlet>=3.0.0
+sqlglot>=11.0.0
+passlib[bcrypt]>=1.7.4
+bcrypt==4.0.1
+agentscope[service,storage,workspace]
+openai>=1.0.0
+APScheduler>=3.10.1
+mcp>=1.0.0
+pandas>=2.0.0
+duckdb>=1.0.0
+

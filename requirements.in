@@ -1,0 +1,4 @@
+# 完整生产依赖源清单。requirements.txt 由 pip-compile 生成，禁止手工编辑。
+-r requirements-core.in
+-r requirements-optional.in
+
