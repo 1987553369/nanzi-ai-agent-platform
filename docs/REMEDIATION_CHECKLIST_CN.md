@@ -27,7 +27,7 @@
 | [x] | AUTH-P1-02 | SSO 强制 TLS 校验，删除 `verify=False` | 不可信证书连接失败 |
 | [x] | AUTH-P1-05 | CORS 默认同源，生产环境禁止通配 Origin 与凭据组合 | 未显式配置的跨域请求不返回 CORS 授权头 |
 | [x] | AUTH-P1-03 | 登录、LLM、工具、代码执行统一限流 | 登录、SSO、聊天生成、MCP 工具执行和代码执行均接入 Redis 原子限流 |
-| [~] | AUTH-P1-04 | Trace、Agent Active Config、上传文件统一对象授权 | Portal Trace/Span 和 Agent 活跃配置已校验所有者/执行权限；上传路径已按用户隔离，仍需浏览器跨用户负向集成测试 |
+| [x] | AUTH-P1-04 | Trace、Agent Active Config、上传文件统一对象授权 | Portal Trace/Span、Agent 活跃配置均校验所有者/执行权限；会话附件固定写入当前用户目录；跨用户上传、重命名、删除、恢复和永久删除的 ASGI 负向集成测试全部通过 |
 | [x] | AI-P1-01 | Prompt Override、Raw Prompt、工具自动批准改为服务端特权 Capability | 普通请求无法弱化运行策略 |
 | [~] | ENG-P1-01 | 固定 Python/Node 依赖，拆分 Runtime/Dev/Optional Lock | Node 已有 lock；Python Runtime/Dev 已拆分，开发工具精确固定；Docker 基础镜像固定补丁版本并禁止 `npm install` 回退；仍需生成完整 Python hash lock、固定镜像 Digest 和拆 Optional 依赖 |
 | [x] | ENG-P1-02 | 建立 CI：Lint、类型、单测、集成、前端构建、SAST、Secret/依赖/镜像扫描 | Quality Gates run 31361730084 全局 success：后端编译/增量 Ruff/SAST/无基础设施测试、前端契约/类型/生产构建、Secret/依赖证据/SBOM、Docker Buildx 完整镜像构建与 Trivy SARIF 报告四个 job 全部成功 |
@@ -122,3 +122,4 @@
 | 2026-08-10 | 整改分支回归 | codex/remediation-hardening 已连续推送测试契约修复（b64af4f、3563c3f、2cc4816、ff6ae2e）；本地 Python 3.11 编译、git diff --check、增量 Ruff/SAST 通过。远端 Quality Gates 前端与供应链成功，容器 job skipped；后端剩余失败已收敛到既有向量索引/SQL Server 测试及 AgentService 离线测试的数据库依赖，未执行真实数据库、迁移或部署。 |
 | 2026-08-10 | ENG-E 远端跑绿 | 整改分支提交 0660f6b 触发的 Quality Gates run 31360188818 完成且 workflow conclusion 为 success；后端、前端、供应链三个 job 均 success，容器 job 因路径条件 skipped。后端离线测试已清除运行时模型、数据库、记忆、联邦执行器及适配器 fixture 的基础设施耦合；未连接真实数据库、执行迁移或部署。 |
 | 2026-08-10 | ENG-E 容器门禁跑绿 | 修复整改分支容器 job 永久 skipped、无效 Trivy Action 标签、前端镜像构建 2 GiB Node 堆溢出及构建失败时的次生报告错误；提交 df00cec 触发的 run 31361730084 全局 success，后端、前端、供应链、容器构建与 Trivy 扫描四个 job 全部成功，ENG-P1-02 完成。 |
+| 2026-08-10 | AUTH-P1-04 对象授权闭环 | 新增无基础设施 ASGI 集成测试，验证会话附件只能落入当前认证用户目录；普通用户向其他用户工作区上传，或对其他用户文件执行重命名、删除、恢复、永久删除时均返回 403，且目标文件和目录内容保持不变。提交 3646b5e 触发的 Quality Gates run 31364088962 全局 success，AUTH-P1-04 完成。 |
