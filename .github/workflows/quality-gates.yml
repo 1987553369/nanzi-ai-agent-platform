@@ -227,7 +227,7 @@ jobs:
         run: mkdir -p reports
 
       - name: Scan image and write SARIF evidence
-        uses: aquasecurity/trivy-action@0.30.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: nanzi-ai-agent:ci-${{ github.sha }}
           format: sarif
