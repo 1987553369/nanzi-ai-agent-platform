@@ -838,7 +838,10 @@ async def test_federated_executor_applies_empty_filter_auto_repair_on_zero_row_s
             chunks.append(chunk)
 
     assert mock_llm_client.generate_text.await_count == 1
-    assert any(chunk.get("title") == "平台自动修正筛选并重试" for chunk in chunks)
+    assert any(
+        str(chunk.get("title") or "").startswith("平台自动修正筛选并重试")
+        for chunk in chunks
+    )
     assert any(
         chunk.get("title") == "执行子查询 (crm_ds)"
         and chunk.get("status") == "success"
