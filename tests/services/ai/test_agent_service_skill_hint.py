@@ -78,7 +78,10 @@ def _disable_agent_db_sessions():
         async def __aexit__(self, exc_type, exc, tb):
             return False
 
-    with patch("app.services.ai.agent_service.AsyncSessionLocal", return_value=_SessionContext()):
+    with (
+        patch("app.services.ai.agent_service.AsyncSessionLocal", return_value=_SessionContext()),
+        patch("app.core.orm.AsyncSessionLocal", return_value=_SessionContext()),
+    ):
         yield
 
 
