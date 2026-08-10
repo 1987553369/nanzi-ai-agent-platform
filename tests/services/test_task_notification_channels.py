@@ -39,8 +39,8 @@ def test_channels_from_task_config_and_merge_preserve_metrics():
 
 def test_build_notification_delivery_supplement_lists_tools_and_dedupe():
     text = build_notification_delivery_supplement(["portal", "dingtalk"])
-    assert "【结果通知要求】" in text
+    assert "【🚨 结果通知强制指令 (System Mandatory Command)】" in text
     assert "send_portal_notification" in text
     assert "send_dingtalk_message" in text
-    assert "每个渠道只发送一次" in text
+    assert "每个勾选渠道仅触发一次 API 调用" in text
     assert build_notification_delivery_supplement([]) == ""

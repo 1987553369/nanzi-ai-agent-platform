@@ -225,7 +225,9 @@ async def test_sqlserver_adapter():
         cols = await adapter.get_columns(table_name="dbo_users")
         assert len(cols) == 2
         assert cols[0] == {"name": "id", "type": "String", "comment": ""}
-        mock_cursor.execute.assert_called_with("SELECT TOP 0 * FROM [dbo_users]")
+        column_query_args = mock_cursor.execute.call_args.args
+        assert "INFORMATION_SCHEMA.COLUMNS" in column_query_args[0]
+        assert column_query_args[1] == ("dbo_users",)
 
         cols_custom = await adapter.get_columns(
             custom_sql="SELECT * FROM dbo_users WHERE id = {{ user_id }}",

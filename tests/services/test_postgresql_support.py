@@ -50,6 +50,8 @@ async def test_pool_manager_routes_postgresql():
         db_user="postgres",
         password="secret",
         database_name="nanzi_demo",
+        tls_mode="verify_full",
+        tls_ca_path="tests/fixtures/test-ca.pem",
     )
     mock_pool = MagicMock()
 

@@ -65,9 +65,9 @@ async def test_ensure_fallback_portal_and_dingtalk():
         "app.services.task_notification_delivery.PortalNotificationService.create",
         new=AsyncMock(),
     ) as portal_create, patch(
-        "app.services.task_notification_delivery.NotificationService.send_dingtalk",
-        new=AsyncMock(return_value=(True, "")),
-    ) as send_dingtalk:
+        "app.services.task_notification_delivery._EXTERNAL_SENDERS",
+        {"dingtalk": AsyncMock(return_value=(True, ""))},
+    ) as senders:
         ok, notes = await ensure_task_notification_deliveries(
             db,
             user_id=9,
@@ -80,4 +80,4 @@ async def test_ensure_fallback_portal_and_dingtalk():
     assert ok is True
     assert notes[0].startswith("fallback_delivered:")
     portal_create.assert_awaited_once()
-    send_dingtalk.assert_awaited_once()
+    senders["dingtalk"].assert_awaited_once()

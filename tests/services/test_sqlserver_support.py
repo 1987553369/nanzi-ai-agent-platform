@@ -118,6 +118,9 @@ async def test_pool_manager_create_sqlserver_pool():
     with patch.dict("sys.modules", {"aioodbc": mock_aioodbc}), patch(
         "app.utils.database_outbound.resolve_database_target",
         AsyncMock(return_value=target),
+    ), patch(
+        "app.services.db_connection_service.DbConnectionService.get_runtime_password",
+        return_value="secret",
     ):
         pool = await DataSourcePoolManager._create_sqlserver_pool(config)
 

@@ -40,12 +40,10 @@ def test_task_run_conversation_id_is_unique_child_conversation():
 def test_scheduled_task_prompt_requires_real_tool_execution():
     prompt = _build_scheduled_task_prompt(24, "主助手(Main)", "检查机器负载并发送钉钉")
 
-    assert "【自动化指令-任务ID: 24】@主助手(Main)" in prompt
-    assert "请立即实际执行任务" in prompt
-    assert "不要只回复计划" in prompt
-    assert "必须调用对应工具完成" in prompt
-    assert "任务内容：检查机器负载并发送钉钉" in prompt
-    assert "【结果通知要求】" not in prompt
+    assert "【📋 任务执行指令 - ID: 24】@主助手(Main)" in prompt
+    assert "必须立即发起真正的工具调用" in prompt
+    assert "检查机器负载并发送钉钉" in prompt
+    assert "结果通知强制指令" not in prompt
 
 
 @pytest.mark.no_infrastructure
@@ -57,11 +55,11 @@ def test_scheduled_task_prompt_appends_notification_channels_supplement():
         notification_channels=["portal", "dingtalk"],
     )
 
-    assert "任务内容：检查机器负载" in prompt
-    assert "【结果通知要求】" in prompt
+    assert "检查机器负载" in prompt
+    assert "【🚨 结果通知强制指令 (System Mandatory Command)】" in prompt
     assert "send_portal_notification" in prompt
     assert "send_dingtalk_message" in prompt
-    assert "每个渠道只发送一次" in prompt
+    assert "每个勾选渠道仅触发一次 API 调用" in prompt
 
 
 @pytest.mark.no_infrastructure
