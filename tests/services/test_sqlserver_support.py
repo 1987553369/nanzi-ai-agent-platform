@@ -105,6 +105,8 @@ async def test_pool_manager_create_sqlserver_pool():
         database_name="erp",
         db_user="sa",
         password="secret",
+        tls_mode="verify_full",
+        tls_ca_path=None,
     )
     mock_pool = MagicMock()
     mock_aioodbc = MagicMock()
