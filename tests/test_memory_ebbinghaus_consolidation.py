@@ -187,7 +187,7 @@ async def test_consolidate_user_memories_clustering_and_merging():
         "app.services.ai.runtime.agentscope.chat.chat_client_from_handle",
         return_value=chat_client
     ), patch(
-        "app.services.ai.embedding_client.EmbeddingClient.get_embedding",
+        "app.services.ai.embedding_client.EmbeddingClient.embed_text",
         new_callable=AsyncMock,
         return_value=[0.1] * 1536
     ), patch(

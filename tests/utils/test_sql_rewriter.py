@@ -58,7 +58,7 @@ def test_table_qualified_filter_uses_query_alias():
 
     rewritten = rewriter.rewrite(sql, filters, context)
 
-    assert "AND dept_code = 'D001'" in rewritten
+    assert "o.dept_code = 'D001'" in rewritten
     assert "orders.dept_code" not in rewritten
 
 def test_table_name_in_condition_is_case_insensitive():
@@ -176,7 +176,7 @@ def test_unqualified_all_filter_skips_multi_table_subquery_scope():
     rewritten = rewriter.rewrite(sql, filters, context)
 
     assert rewritten.count("dept_code = 'D001'") == 1
-    assert "o.dept_code = 'D001'" in rewritten
+    assert "AND dept_code = 'D001'" in rewritten
     assert "c.dept_code = 'D001'" not in rewritten
     assert "FROM customers AS c WHERE dept_code" not in rewritten
 

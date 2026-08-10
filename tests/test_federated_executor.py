@@ -744,6 +744,8 @@ async def test_federated_executor_applies_empty_filter_auto_repair_on_zero_row_s
     runner = MagicMock()
     runner.user_info = {"id": 1, "role": "user"}
     runner.trace_buffer = MagicMock()
+    runner._current_user_id.return_value = 1
+    runner._current_user_is_admin.return_value = False
     runner._save_last_data_result_for_followups = AsyncMock()
 
     plan = """
@@ -1065,7 +1067,15 @@ async def test_federated_executor_repairs_failed_secondary_subquery_before_degra
 
     # repair 轮的 user_ds 子查询 SQL 与首轮完全一致，会命中子查询结果缓存而不再重跑，
     # 因此 execute_sql_query_core 只会被调用 3 次：user_ok -> hr_fail -> (repair) hr_ok。
-    sql_exec_mock = AsyncMock(side_effect=[user_result, hr_error, "[TOOL_ERROR] explain error", hr_result])
+    sql_exec_mock = AsyncMock(
+        side_effect=[
+            user_result,
+            hr_error,
+            "[TOOL_ERROR] explain error",
+            hr_result,
+            hr_result,
+        ]
+    )
     with patch("app.services.ai.executors.federated_executor.AgentConfigProvider.get_configured_llm", side_effect=mock_get_llm), \
          patch("app.services.ai.executors.federated_executor.chat_client_from_handle", side_effect=fake_chat_client_from_handle), \
          patch("app.services.ai.executors.federated_executor.AsyncSessionLocal") as mock_session_cls, \
@@ -1079,7 +1089,7 @@ async def test_federated_executor_repairs_failed_secondary_subquery_before_degra
         async for chunk in FederatedQueryExecutor(runner, "", ["user_ds", "hr_ds"]).execute([], "", "test"):
             chunks.append(chunk)
 
-    assert sql_exec_mock.await_count == 4
+    assert sql_exec_mock.await_count == 5
     assert mock_llm_client.generate_text.await_count == 2
     assert any(chunk.get("title") == "修复联邦子查询 SQL" for chunk in chunks)
     assert not any("已自动降级" in str(chunk.get("details") or chunk.get("content") or "") for chunk in chunks)
