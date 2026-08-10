@@ -346,6 +346,10 @@ async def test_chatbi_execute_uses_session_user_for_openclaw_sql_execution(monke
     monkeypatch.setattr(chatbi.AuthService, "resolve_user_by_username", fake_resolve_user_by_username)
     monkeypatch.setattr(chatbi, "execute_sql_query_core", fake_execute_sql_query_core)
     monkeypatch.setattr(chatbi, "resolve_table_bindings_from_db", AsyncMock(return_value={}))
+    monkeypatch.setattr(
+        "app.services.ai.chatbi_sql_query_binding._fetch_table_binding_candidates_from_db",
+        AsyncMock(return_value={}),
+    )
 
     with patch.dict("os.environ", {"SQL_EXECUTION_MODE": "local"}):
         await chatbi.chatbi_sql_execute(body, user_info=api_key_user, db=AsyncMock())

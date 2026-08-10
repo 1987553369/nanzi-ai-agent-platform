@@ -22,10 +22,12 @@ async def _fake_admin():
 
 
 def _build_app() -> FastAPI:
+    portal = APIRouter()
+    portal.include_router(personal_skills.router, prefix="/skills/personal")
+    portal.include_router(skills.router, prefix="/skills")
     app = FastAPI()
     app.dependency_overrides[require_api_key] = _fake_user
-    app.include_router(personal_skills.router, prefix="/api/portal/skills/personal")
-    app.include_router(skills.router, prefix="/api/portal/skills")
+    app.include_router(portal, prefix="/api/portal")
     return app
 
 
