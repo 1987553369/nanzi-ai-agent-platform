@@ -1,10 +1,13 @@
 import pytest
 import uuid
 import json
+import os
 from httpx import AsyncClient, ASGITransport
 from app.main import app
+from app.api.v1.endpoints import chat as chat_endpoint
 from app.services.auth_service import AuthService
 from app.services.ai.memory_service import memory_service
+from app.utils.fs_access import get_user_uploads_dir
 from unittest.mock import AsyncMock, patch, MagicMock
 
 @pytest.fixture
@@ -45,6 +48,14 @@ async def test_upload_success(db_session, valid_api_key):
     files = {"file": ("chart.png", file_content, "image/png")}
     
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        me_resp = await client.get(
+            "/api/portal/auth/me",
+            headers={"X-API-Key": valid_api_key},
+        )
+        assert me_resp.status_code == 200
+        expected_upload_dir = get_user_uploads_dir(me_resp.json()["data"])
+        assert expected_upload_dir
+
         resp = await client.post(
             "/api/v1/chat/upload",
             files=files,
@@ -60,6 +71,35 @@ async def test_upload_success(db_session, valid_api_key):
         assert data["data"]["ext"] == "png"
         assert "agent_workspaces" in data["data"]["url"]
         assert data["data"]["url"].endswith("chart.png")
+        assert os.path.commonpath([data["data"]["url"], expected_upload_dir]) == expected_upload_dir
+        assert os.path.isfile(data["data"]["url"])
+        with open(data["data"]["url"], "rb") as handle:
+            assert handle.read() == file_content
+
+
+@pytest.mark.asyncio
+@pytest.mark.no_infrastructure
+async def test_chat_upload_is_scoped_to_authenticated_user():
+    user_info = {"user_id": 202, "username": "upload_user", "role": "user"}
+    expected_upload_dir = get_user_uploads_dir(user_info)
+    assert expected_upload_dir
+    app.dependency_overrides[chat_endpoint.require_api_key] = lambda: user_info
+
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.post(
+                "/api/v1/chat/upload",
+                files={"file": ("scope.txt", b"private attachment", "text/plain")},
+            )
+    finally:
+        app.dependency_overrides.pop(chat_endpoint.require_api_key, None)
+
+    assert resp.status_code == 200
+    uploaded_path = resp.json()["data"]["url"]
+    assert os.path.commonpath([uploaded_path, expected_upload_dir]) == expected_upload_dir
+    assert os.path.isfile(uploaded_path)
+    with open(uploaded_path, "rb") as handle:
+        assert handle.read() == b"private attachment"
 
 @pytest.mark.asyncio
 async def test_upload_forbidden_extensions(db_session, valid_api_key):

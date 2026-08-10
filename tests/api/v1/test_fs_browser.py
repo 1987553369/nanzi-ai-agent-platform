@@ -6,6 +6,7 @@ from httpx import AsyncClient, ASGITransport
 from app.main import app
 from app.utils.fs_access import get_user_private_workspace_root, get_user_uploads_dir
 from app.utils.fs_paths import get_data_base_dir
+from app.api.v1.endpoints import fs as fs_endpoint
 from app.api.v1.endpoints.fs import (
     WORKSPACE_BROWSER_PREFS_REDIS_PREFIX,
     WORKSPACE_RECENT_REDIS_PREFIX,
@@ -196,6 +197,84 @@ async def test_regular_user_cannot_write_other_workspace_file(db_session, valid_
         assert resp.status_code == 403
         with open(target, encoding="utf-8") as handle:
             assert handle.read() == "secret"
+
+
+@pytest.mark.asyncio
+@pytest.mark.no_infrastructure
+async def test_regular_user_cannot_upload_to_other_workspace():
+    base = get_data_base_dir()
+    other_dir = os.path.join(base, "agent_workspaces", "other_user__999", "uploads")
+    os.makedirs(other_dir, exist_ok=True)
+    entries_before = set(os.listdir(other_dir))
+
+    app.dependency_overrides[fs_endpoint.require_api_key] = lambda: {
+        "user_id": 101,
+        "username": "integration_user",
+        "role": "user",
+    }
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.post(
+                "/api/v1/chat/fs/upload",
+                params={"parent_path": other_dir},
+                files={"file": ("secret.txt", b"must-not-be-written", "text/plain")},
+            )
+    finally:
+        app.dependency_overrides.pop(fs_endpoint.require_api_key, None)
+
+    assert resp.status_code == 403
+    assert set(os.listdir(other_dir)) == entries_before
+
+
+@pytest.mark.asyncio
+@pytest.mark.no_infrastructure
+@pytest.mark.parametrize(
+    ("endpoint", "path_kind"),
+    [
+        ("rename-entry", "file"),
+        ("delete-entry", "file"),
+        ("restore-entry", "trash"),
+        ("purge-entry", "trash"),
+    ],
+)
+async def test_regular_user_cannot_mutate_other_workspace_entries(
+    endpoint, path_kind
+):
+    base = get_data_base_dir()
+    other_root = os.path.join(base, "agent_workspaces", "other_user__999")
+    relative_path = (
+        os.path.join(".trash", "1700000000_deadbeef_secret.txt")
+        if path_kind == "trash"
+        else "secret.txt"
+    )
+    target = os.path.join(other_root, relative_path)
+    os.makedirs(os.path.dirname(target), exist_ok=True)
+    with open(target, "w", encoding="utf-8") as handle:
+        handle.write("other-user-secret")
+
+    payload = {"path": target}
+    if endpoint == "rename-entry":
+        payload["new_name"] = "stolen.txt"
+
+    app.dependency_overrides[fs_endpoint.require_api_key] = lambda: {
+        "user_id": 101,
+        "username": "integration_user",
+        "role": "user",
+    }
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.post(
+                f"/api/v1/chat/fs/{endpoint}",
+                json=payload,
+            )
+    finally:
+        app.dependency_overrides.pop(fs_endpoint.require_api_key, None)
+
+    assert resp.status_code == 403
+    assert os.path.isfile(target)
+    with open(target, encoding="utf-8") as handle:
+        assert handle.read() == "other-user-secret"
+    assert not os.path.exists(os.path.join(other_root, "stolen.txt"))
 
 
 @pytest.mark.asyncio
