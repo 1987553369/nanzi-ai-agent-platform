@@ -1016,7 +1016,7 @@ async def test_federated_executor_repairs_failed_secondary_subquery_before_degra
     bad_plan = """
     <multi_dataset_plan>
       <sub_query dataset_name="user_ds" temp_table="t_user">SELECT id FROM users</sub_query>
-      <sub_query dataset_name="hr_ds" temp_table="t_hr">SELECT bad_col FROM hrmresource</sub_query>
+      <sub_query dataset_name="hr_ds" temp_table="t_hr">SELECT id, name, bad_col FROM hrmresource</sub_query>
       <memory_join>SELECT u.id, h.name FROM t_user u LEFT JOIN t_hr h ON u.id = h.id</memory_join>
     </multi_dataset_plan>
     """

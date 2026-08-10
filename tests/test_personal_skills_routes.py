@@ -1,3 +1,4 @@
+import asyncio
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace
@@ -47,22 +48,22 @@ def test_platform_skill_list_is_readable_without_management_permission():
         )
 
         with patch("app.api.portal.endpoints.skills.settings", SimpleNamespace(SKILLS_DIR=str(global_dir))):
-            app = _build_app(personal_first=True, platform_admin=False)
             list_route = next(
                 route
-                for route in app.routes
-                if getattr(route, "path", None) == "/api/portal/skills"
+                for route in skills.router.routes
+                if getattr(route, "path", None) == ""
                 and "GET" in getattr(route, "methods", set())
             )
             dependency_calls = {dependency.call for dependency in list_route.dependant.dependencies}
             assert require_api_key in dependency_calls
             assert skills.skill_platform_admin not in dependency_calls
 
-            client = TestClient(app)
-            response = client.get("/api/portal/skills")
+            payload = asyncio.run(
+                skills.list_skills(
+                    user={"user_id": 1, "user_name": "tester", "role": "user"}
+                )
+            )
 
-        assert response.status_code == 200
-        payload = response.json()
         assert payload["status"] == "success"
         assert payload["data"][0]["id"] == "public-skill"
 

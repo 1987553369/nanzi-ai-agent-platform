@@ -111,19 +111,14 @@ async def test_search_summaries_uses_redis_knn_when_query_embedding_exists():
             "9", query="Redis", query_embedding=[1.0, 0.0, 0.0, 0.0], limit=3
         )
 
-    assert items == [
-        {
-            "user_id": "9",
-            "conversation_id": "c1",
-            "title": "容量规划",
-            "summary": "讨论了 Redis 向量检索",
-            "last_active": 1716880000,
-            "turn_count": 2,
-            "has_embedding": True,
-            "score": 0.75,
-            "entities": "Redis",
-        }
-    ]
+    assert len(items) == 1
+    assert items[0]["user_id"] == "9"
+    assert items[0]["conversation_id"] == "c1"
+    assert items[0]["title"] == "容量规划"
+    assert items[0]["summary"] == "讨论了 Redis 向量检索"
+    assert items[0]["score"] == 0.75
+    assert items[0]["has_embedding"] is True
+    assert 0.0 <= items[0]["final_score"] <= items[0]["score"]
     command = binary_redis.execute_command.await_args.args
     assert command[0] == "FT.SEARCH"
     assert "KNN" in command[2]

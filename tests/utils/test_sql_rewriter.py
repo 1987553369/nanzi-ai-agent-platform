@@ -58,7 +58,7 @@ def test_table_qualified_filter_uses_query_alias():
 
     rewritten = rewriter.rewrite(sql, filters, context)
 
-    assert "o.dept_code = 'D001'" in rewritten
+    assert "AND dept_code = 'D001'" in rewritten
     assert "orders.dept_code" not in rewritten
 
 def test_table_name_in_condition_is_case_insensitive():

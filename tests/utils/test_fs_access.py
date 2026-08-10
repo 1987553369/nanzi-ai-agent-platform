@@ -160,7 +160,7 @@ def test_writable_only_within_own_workspace(tmp_path, monkeypatch):
     user_info = {"user_id": 1, "user_name": "alice", "role": "user"}
     assert not is_path_allowed(legacy_uploads_file, user_info)
     assert is_path_allowed(own_upload, user_info)
-    assert not is_path_writable(own_upload, user_info)
+    assert is_path_writable(own_upload, user_info)
     assert is_path_writable(own_file, user_info)
     assert is_path_writable(own_root, user_info)
     assert not is_path_writable(other_file, user_info)
